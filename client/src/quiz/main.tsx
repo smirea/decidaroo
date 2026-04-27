@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { Headphones, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
 import { clampScore, averageScore } from './quizScreen.tsx';
 import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 
 const quizzes = [tinderSwipeQuiz] as const;
+const themeSongUrl = '/decidaroo.mp3';
+const soundChoiceKey = 'decidaroo:sound-choice';
+const soundToggleKey = 'decidaroo:sound-on';
+const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
 
 type ScreenResult = {
 	title: string;
@@ -14,6 +19,18 @@ type QuizResult = {
 	title: string;
 	score: number;
 	screens: ScreenResult[];
+};
+
+type SoundChoice = 'yes' | 'no';
+
+type StoredSoundChoice = {
+	choice: SoundChoice;
+	at: number;
+};
+
+type StoredSoundToggle = {
+	on: boolean;
+	at: number;
 };
 
 function screenTitle(screen: unknown, index: number) {
@@ -30,11 +47,73 @@ function scoreMood(score: number) {
 	return 'suspiciously responsible';
 }
 
+function readStoredSoundChoice(): StoredSoundChoice | null {
+	try {
+		const raw = window.localStorage.getItem(soundChoiceKey);
+		if (!raw) return null;
+
+		const parsed = JSON.parse(raw) as Partial<StoredSoundChoice>;
+		if ((parsed.choice !== 'yes' && parsed.choice !== 'no') || typeof parsed.at !== 'number') return null;
+		if (Date.now() - parsed.at >= soundChoiceSkipMs) {
+			window.localStorage.removeItem(soundChoiceKey);
+			return null;
+		}
+
+		return { choice: parsed.choice, at: parsed.at };
+	} catch {
+		return null;
+	}
+}
+
+function writeStoredSoundChoice(choice: SoundChoice): StoredSoundChoice {
+	const stored = { choice, at: Date.now() };
+	window.localStorage.setItem(soundChoiceKey, JSON.stringify(stored));
+	return stored;
+}
+
+function hasFreshHeadphoneYes(stored: StoredSoundChoice | null) {
+	return stored?.choice === 'yes';
+}
+
+function readStoredSoundOn() {
+	try {
+		const raw = window.localStorage.getItem(soundToggleKey);
+		if (!raw) return true;
+
+		const parsed = JSON.parse(raw) as Partial<StoredSoundToggle>;
+		if (typeof parsed.on !== 'boolean' || typeof parsed.at !== 'number') {
+			window.localStorage.removeItem(soundToggleKey);
+			return true;
+		}
+
+		if (Date.now() - parsed.at >= soundChoiceSkipMs) {
+			window.localStorage.removeItem(soundToggleKey);
+			return true;
+		}
+
+		return parsed.on;
+	} catch {
+		return true;
+	}
+}
+
+function writeStoredSoundOn(on: boolean) {
+	window.localStorage.setItem(soundToggleKey, JSON.stringify({ on, at: Date.now() }));
+}
+
+function getInitialSoundState() {
+	const stored = readStoredSoundChoice();
+	return { stored, showIntro: !hasFreshHeadphoneYes(stored) };
+}
+
 export function QuizPage() {
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
 	const [screenScores, setScreenScores] = useState<number[]>([]);
 	const [results, setResults] = useState<QuizResult[]>([]);
+	const [soundState, setSoundState] = useState(getInitialSoundState);
+	const [soundOn, setSoundOn] = useState(readStoredSoundOn);
+	const audioRef = useRef<HTMLAudioElement | null>(null);
 
 	const finalScore = averageScore(results.map(result => result.score));
 	const isDone = results.length === quizzes.length;
@@ -44,6 +123,24 @@ export function QuizPage() {
 	const completedScreens = results.reduce((total, result) => total + result.screens.length, 0) + screenIndex;
 	const progress = isDone ? 100 : Math.round((completedScreens / totalScreens) * 100);
 	const activeScore = screenScores.length > 0 ? averageScore(screenScores) : '--';
+
+	useEffect(() => {
+		const audio = document.createElement('audio');
+		audio.src = themeSongUrl;
+		audio.loop = true;
+		audio.preload = 'auto';
+		audio.hidden = true;
+		audio.setAttribute('aria-hidden', 'true');
+		audioRef.current = audio;
+		document.body.append(audio);
+		audio.load();
+
+		return () => {
+			audio.pause();
+			audio.remove();
+			audioRef.current = null;
+		};
+	}, []);
 
 	function restart() {
 		setQuizIndex(0);
@@ -79,15 +176,111 @@ export function QuizPage() {
 		setQuizIndex(current => current + 1);
 	}
 
+	async function playThemeSong() {
+		const audio = audioRef.current;
+		if (!audio) return false;
+
+		try {
+			await audio.play();
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	function pauseThemeSong() {
+		const audio = audioRef.current;
+		if (!audio) return;
+
+		audio.pause();
+	}
+
+	function chooseSound(choice: SoundChoice) {
+		const stored = writeStoredSoundChoice(choice);
+		setSoundState({ stored, showIntro: false });
+
+		const nextSoundOn = choice === 'yes';
+		setSoundOn(nextSoundOn);
+		writeStoredSoundOn(nextSoundOn);
+
+		if (nextSoundOn) void playThemeSong();
+		else pauseThemeSong();
+	}
+
+	function toggleThemeSong() {
+		if (soundOn && !audioRef.current?.paused) {
+			setSoundOn(false);
+			writeStoredSoundOn(false);
+			pauseThemeSong();
+			return;
+		}
+
+		const stored = writeStoredSoundChoice('yes');
+		setSoundState({ stored, showIntro: false });
+		setSoundOn(true);
+		writeStoredSoundOn(true);
+
+		void playThemeSong();
+	}
+
+	function SoundButton() {
+		return (
+			<button
+				aria-label={soundOn ? 'Turn theme song off' : 'Turn theme song on'}
+				className='flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-neutral-950 bg-white text-neutral-950 shadow-[3px_3px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#171717]'
+				onClick={toggleThemeSong}
+				type='button'
+			>
+				{soundOn ? <SpeakerHigh size={21} weight='fill' /> : <SpeakerSlash size={21} weight='fill' />}
+			</button>
+		);
+	}
+
+	if (soundState.showIntro) {
+		return (
+			<main className='h-dvh overflow-hidden bg-neutral-100 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+				<section className='mx-auto flex h-full w-full max-w-md flex-col items-center justify-center gap-6 p-6 text-center sm:h-[760px] sm:max-h-full sm:p-0'>
+					<div className='space-y-6'>
+						<h1 className='text-5xl font-black leading-none'>Decidaroo</h1>
+						<div className='mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-neutral-950 bg-fuchsia-200 shadow-[5px_5px_0_#171717]'>
+							<Headphones size={54} weight='duotone' />
+						</div>
+						<p className='text-2xl font-black leading-tight'>Are your headphones connected?</p>
+					</div>
+
+					<div className='grid w-full gap-3'>
+						<button
+							className='min-h-12 rounded-lg bg-neutral-950 px-4 py-3 text-base font-black text-white shadow-sm active:translate-y-px'
+							onClick={() => chooseSound('yes')}
+							type='button'
+						>
+							yes
+						</button>
+						<button
+							className='min-h-12 rounded-lg border-2 border-neutral-950 bg-white px-4 py-3 text-base font-black text-neutral-950 shadow-[3px_3px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#171717]'
+							onClick={() => chooseSound('no')}
+							type='button'
+						>
+							no I'm a boring person
+						</button>
+					</div>
+				</section>
+			</main>
+		);
+	}
+
 	return (
 		<main className='h-dvh overflow-hidden bg-neutral-100 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
 			{isDone ? (
 				<section className='mx-auto flex h-full w-full max-w-md flex-col p-4 sm:h-[760px] sm:max-h-full sm:p-0'>
 					<section className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
-						<div className='space-y-2'>
-							<p className='text-xs font-bold uppercase text-fuchsia-700'>final verdict</p>
-							<h2 className='text-4xl font-black leading-none'>{finalScore}</h2>
-							<p className='text-lg font-bold text-neutral-700'>{scoreMood(finalScore)}</p>
+						<div className='flex items-start gap-3'>
+							<SoundButton />
+							<div className='space-y-2'>
+								<p className='text-xs font-bold uppercase text-fuchsia-700'>final verdict</p>
+								<h2 className='text-4xl font-black leading-none'>{finalScore}</h2>
+								<p className='text-lg font-bold text-neutral-700'>{scoreMood(finalScore)}</p>
+							</div>
 						</div>
 
 						<div className='space-y-3'>
@@ -129,6 +322,7 @@ export function QuizPage() {
 			) : currentQuiz && currentScreen ? (
 				<section className='mx-auto flex h-full w-full max-w-md flex-col gap-3 overflow-visible p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
 					<header className='flex shrink-0 items-center gap-3'>
+						<SoundButton />
 						<div className='h-3 flex-1 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white'>
 							<div className='h-full bg-emerald-500 transition-all' style={{ width: `${progress}%` }} />
 						</div>
