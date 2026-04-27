@@ -1,7 +1,8 @@
 {
 	// pulled from bun init
 	"compilerOptions": {
-		"lib": ["ESNext"],
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
+		"types": ["bun-types", "vite/client"],
 		"target": "ESNext",
 		"module": "Preserve",
 		"moduleDetection": "force",
