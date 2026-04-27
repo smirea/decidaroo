@@ -23,7 +23,8 @@ body,
 #root {
 	margin: 0;
 	width: 100%;
-	min-height: 100%;
+	height: 100%;
+	overflow: hidden;
 }
 
 body,
@@ -32,4 +33,24 @@ input,
 select,
 textarea {
 	font: inherit;
+}
+
+@keyframes swipe-card-jiggle {
+	0%,
+	100% {
+		transform: translateX(0) rotate(0deg);
+	}
+	25% {
+		transform: translateX(-2px) rotate(-0.35deg);
+	}
+	50% {
+		transform: translateX(2px) rotate(0.35deg);
+	}
+	75% {
+		transform: translateX(-1px) rotate(-0.2deg);
+	}
+}
+
+.swipe-card-idle {
+	animation: swipe-card-jiggle 3.4s ease-in-out infinite;
 }

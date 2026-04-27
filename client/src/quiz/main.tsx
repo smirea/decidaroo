@@ -1,10 +1,8 @@
-import { useMemo, useState } from 'react';
-import { buttonsQuiz } from './buttons.tsx';
-import { randomQuiz } from './random.tsx';
+import { useState } from 'react';
 import { clampScore, averageScore } from './quizScreen.tsx';
-import { sliderQuiz } from './slider.tsx';
+import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 
-const quizzes = [sliderQuiz, buttonsQuiz, randomQuiz] as const;
+const quizzes = [tinderSwipeQuiz] as const;
 
 type ScreenResult = {
 	title: string;
@@ -38,13 +36,14 @@ export function QuizPage() {
 	const [screenScores, setScreenScores] = useState<number[]>([]);
 	const [results, setResults] = useState<QuizResult[]>([]);
 
-	const totalScreens = useMemo(() => quizzes.reduce((total, quiz) => total + quiz.screens.length, 0), []);
-	const completedScreens = results.reduce((total, result) => total + result.screens.length, 0) + screenIndex;
 	const finalScore = averageScore(results.map(result => result.score));
 	const isDone = results.length === quizzes.length;
-	const progress = isDone ? 100 : Math.round((completedScreens / totalScreens) * 100);
 	const currentQuiz = quizzes[quizIndex];
 	const currentScreen = currentQuiz?.screens[screenIndex];
+	const totalScreens = quizzes.reduce((total, quiz) => total + quiz.screens.length, 0);
+	const completedScreens = results.reduce((total, result) => total + result.screens.length, 0) + screenIndex;
+	const progress = isDone ? 100 : Math.round((completedScreens / totalScreens) * 100);
+	const activeScore = screenScores.length > 0 ? averageScore(screenScores) : '--';
 
 	function restart() {
 		setQuizIndex(0);
@@ -81,26 +80,10 @@ export function QuizPage() {
 	}
 
 	return (
-		<main className='min-h-screen bg-neutral-100 px-4 py-5 text-neutral-950 sm:py-8'>
-			<section className='mx-auto flex min-h-[calc(100vh-2.5rem)] w-full max-w-md flex-col gap-4'>
-				<header className='space-y-3'>
-					<div className='flex items-center justify-between gap-3'>
-						<div>
-							<p className='text-xs font-bold uppercase text-neutral-500'>Decidaroo</p>
-							<h1 className='text-3xl font-black leading-none text-neutral-950'>Decision Tool Decider</h1>
-						</div>
-						<div className='rounded-lg border-2 border-neutral-950 bg-sky-300 px-3 py-2 text-center shadow-[3px_3px_0_#171717]'>
-							<p className='text-[10px] font-bold uppercase'>score</p>
-							<p className='text-2xl font-black leading-none'>{isDone ? finalScore : '--'}</p>
-						</div>
-					</div>
-					<div className='h-3 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white'>
-						<div className='h-full bg-emerald-500 transition-all' style={{ width: `${progress}%` }} />
-					</div>
-				</header>
-
-				{isDone ? (
-					<section className='flex flex-1 flex-col gap-5 rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
+		<main className='h-dvh overflow-hidden bg-neutral-100 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+			{isDone ? (
+				<section className='mx-auto flex h-full w-full max-w-md flex-col p-4 sm:h-[760px] sm:max-h-full sm:p-0'>
+					<section className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
 						<div className='space-y-2'>
 							<p className='text-xs font-bold uppercase text-fuchsia-700'>final verdict</p>
 							<h2 className='text-4xl font-black leading-none'>{finalScore}</h2>
@@ -142,35 +125,29 @@ export function QuizPage() {
 							Run the nonsense again
 						</button>
 					</section>
-				) : currentQuiz && currentScreen ? (
-					<section className='flex flex-1 flex-col gap-4 rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
-						<div className='flex items-start justify-between gap-4 border-b-2 border-neutral-950 pb-4'>
-							<div>
-								<p className='text-xs font-bold uppercase text-neutral-500'>
-									Game {quizIndex + 1} of {quizzes.length}
-								</p>
-								<h2 className='text-xl font-black leading-tight'>{currentQuiz.title}</h2>
-								<p className='mt-1 text-sm font-semibold text-neutral-600'>{currentQuiz.tagline}</p>
-							</div>
-							<p className='rounded-lg bg-lime-300 px-2 py-1 text-sm font-black'>
-								{screenIndex + 1}/{currentQuiz.screens.length}
-							</p>
+				</section>
+			) : currentQuiz && currentScreen ? (
+				<section className='mx-auto flex h-full w-full max-w-md flex-col gap-3 overflow-visible p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
+					<header className='flex shrink-0 items-center gap-3'>
+						<div className='h-3 flex-1 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white'>
+							<div className='h-full bg-emerald-500 transition-all' style={{ width: `${progress}%` }} />
 						</div>
-
-						<div className='flex flex-1 items-center'>
-							<div className='w-full'>
-								<currentQuiz.Screen
-									config={currentScreen}
-									key={`${currentQuiz.id}-${screenIndex}`}
-									screenCount={currentQuiz.screens.length}
-									screenNumber={screenIndex + 1}
-									submit={submit}
-								/>
-							</div>
+						<div className='rounded-lg border-2 border-neutral-950 bg-sky-300 px-3 py-2 text-center shadow-[3px_3px_0_#171717]'>
+							<p className='text-[10px] font-bold uppercase'>score</p>
+							<p className='text-2xl font-black leading-none'>{activeScore}</p>
 						</div>
-					</section>
-				) : null}
-			</section>
+					</header>
+					<div className='min-h-0 flex-1 overflow-visible'>
+						<currentQuiz.Screen
+							config={currentScreen}
+							key={`${currentQuiz.id}-${screenIndex}`}
+							screenCount={currentQuiz.screens.length}
+							screenNumber={screenIndex + 1}
+							submit={submit}
+						/>
+					</div>
+				</section>
+			) : null}
 		</main>
 	);
 }
