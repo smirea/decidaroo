@@ -106,6 +106,20 @@ function getInitialSoundState() {
 	return { stored, showIntro: !hasFreshHeadphoneYes(stored) };
 }
 
+function ClubBackground() {
+	return (
+		<div aria-hidden='true' className='club-background'>
+			<span className='club-spotlight club-spotlight-a' />
+			<span className='club-spotlight club-spotlight-b' />
+			<span className='club-spotlight club-spotlight-c' />
+			<span className='club-spotlight club-spotlight-d' />
+			<span className='club-spotlight club-spotlight-e' />
+			<span className='club-spotlight club-spotlight-f' />
+			<span className='club-spotlight club-spotlight-g' />
+		</div>
+	);
+}
+
 export function QuizPage() {
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
@@ -113,6 +127,7 @@ export function QuizPage() {
 	const [results, setResults] = useState<QuizResult[]>([]);
 	const [soundState, setSoundState] = useState(getInitialSoundState);
 	const [soundOn, setSoundOn] = useState(readStoredSoundOn);
+	const [themeSongPlaying, setThemeSongPlaying] = useState(false);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 
 	const finalScore = averageScore(results.map(result => result.score));
@@ -132,13 +147,24 @@ export function QuizPage() {
 		audio.hidden = true;
 		audio.setAttribute('aria-hidden', 'true');
 		audioRef.current = audio;
+		const syncAudioState = () => setThemeSongPlaying(!audio.paused);
+
+		audio.addEventListener('play', syncAudioState);
+		audio.addEventListener('pause', syncAudioState);
+		audio.addEventListener('ended', syncAudioState);
 		document.body.append(audio);
 		audio.load();
 
+		if (soundOn && soundState.stored?.choice === 'yes') void playThemeSong();
+
 		return () => {
+			audio.removeEventListener('play', syncAudioState);
+			audio.removeEventListener('pause', syncAudioState);
+			audio.removeEventListener('ended', syncAudioState);
 			audio.pause();
 			audio.remove();
 			audioRef.current = null;
+			setThemeSongPlaying(false);
 		};
 	}, []);
 
@@ -182,8 +208,10 @@ export function QuizPage() {
 
 		try {
 			await audio.play();
+			setThemeSongPlaying(true);
 			return true;
 		} catch {
+			setThemeSongPlaying(false);
 			return false;
 		}
 	}
@@ -193,6 +221,12 @@ export function QuizPage() {
 		if (!audio) return;
 
 		audio.pause();
+		setThemeSongPlaying(false);
+	}
+
+	function saveThemeSongIntent(on: boolean) {
+		setSoundOn(on);
+		writeStoredSoundOn(on);
 	}
 
 	function chooseSound(choice: SoundChoice) {
@@ -200,48 +234,51 @@ export function QuizPage() {
 		setSoundState({ stored, showIntro: false });
 
 		const nextSoundOn = choice === 'yes';
-		setSoundOn(nextSoundOn);
-		writeStoredSoundOn(nextSoundOn);
 
-		if (nextSoundOn) void playThemeSong();
-		else pauseThemeSong();
+		if (!nextSoundOn) {
+			saveThemeSongIntent(false);
+			pauseThemeSong();
+			return;
+		}
+
+		void playThemeSong().then(saveThemeSongIntent);
 	}
 
 	function toggleThemeSong() {
-		if (soundOn && !audioRef.current?.paused) {
-			setSoundOn(false);
-			writeStoredSoundOn(false);
+		if (themeSongPlaying) {
+			saveThemeSongIntent(false);
 			pauseThemeSong();
 			return;
 		}
 
 		const stored = writeStoredSoundChoice('yes');
 		setSoundState({ stored, showIntro: false });
-		setSoundOn(true);
-		writeStoredSoundOn(true);
 
-		void playThemeSong();
+		void playThemeSong().then(saveThemeSongIntent);
 	}
 
 	function SoundButton() {
 		return (
 			<button
-				aria-label={soundOn ? 'Turn theme song off' : 'Turn theme song on'}
+				aria-label={themeSongPlaying ? 'Turn theme song off' : 'Turn theme song on'}
 				className='flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-neutral-950 bg-white text-neutral-950 shadow-[3px_3px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#171717]'
 				onClick={toggleThemeSong}
 				type='button'
 			>
-				{soundOn ? <SpeakerHigh size={21} weight='fill' /> : <SpeakerSlash size={21} weight='fill' />}
+				{themeSongPlaying ? <SpeakerHigh size={21} weight='fill' /> : <SpeakerSlash size={21} weight='fill' />}
 			</button>
 		);
 	}
 
 	if (soundState.showIntro) {
 		return (
-			<main className='h-dvh overflow-hidden bg-neutral-100 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
-				<section className='mx-auto flex h-full w-full max-w-md flex-col items-center justify-center gap-6 p-6 text-center sm:h-[760px] sm:max-h-full sm:p-0'>
+			<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+				<ClubBackground />
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col items-center justify-center gap-6 p-6 text-center text-white sm:h-[760px] sm:max-h-full sm:p-0'>
 					<div className='space-y-6'>
-						<h1 className='text-5xl font-black leading-none'>Decidaroo</h1>
+						<h1 className='text-5xl font-black leading-none drop-shadow-[0_2px_18px_rgba(255,255,255,0.45)]'>
+							Decidaroo
+						</h1>
 						<div className='mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-neutral-950 bg-fuchsia-200 shadow-[5px_5px_0_#171717]'>
 							<Headphones size={54} weight='duotone' />
 						</div>
@@ -270,9 +307,10 @@ export function QuizPage() {
 	}
 
 	return (
-		<main className='h-dvh overflow-hidden bg-neutral-100 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+		<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+			<ClubBackground />
 			{isDone ? (
-				<section className='mx-auto flex h-full w-full max-w-md flex-col p-4 sm:h-[760px] sm:max-h-full sm:p-0'>
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col p-4 sm:h-[760px] sm:max-h-full sm:p-0'>
 					<section className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
 						<div className='flex items-start gap-3'>
 							<SoundButton />
@@ -320,7 +358,7 @@ export function QuizPage() {
 					</section>
 				</section>
 			) : currentQuiz && currentScreen ? (
-				<section className='mx-auto flex h-full w-full max-w-md flex-col gap-3 overflow-visible p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col gap-3 overflow-visible p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
 					<header className='flex shrink-0 items-center gap-3'>
 						<SoundButton />
 						<div className='h-3 flex-1 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white'>

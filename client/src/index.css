@@ -35,6 +35,215 @@ textarea {
 	font: inherit;
 }
 
+.club-background {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	overflow: hidden;
+	background:
+		radial-gradient(ellipse at 50% 105%, rgba(32, 12, 54, 0.9) 0%, rgba(7, 5, 13, 0.98) 58%),
+		linear-gradient(180deg, #160922 0%, #080611 55%, #040309 100%);
+}
+
+.club-background::before {
+	position: absolute;
+	inset: 0;
+	content: '';
+	background:
+		linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+	background-size: 56px 56px;
+	mask-image: linear-gradient(to bottom, transparent, black 35%, black 100%);
+	opacity: 0.24;
+	transform: perspective(360px) rotateX(62deg) translateY(18%);
+	transform-origin: bottom;
+}
+
+.club-background::after {
+	position: absolute;
+	inset: auto -20% -18% -20%;
+	height: 42%;
+	content: '';
+	background: linear-gradient(90deg, rgba(34, 211, 238, 0.18), rgba(236, 72, 153, 0.2), rgba(132, 204, 22, 0.16));
+	filter: blur(34px);
+	animation: club-floor-pulse 4.8s ease-in-out infinite alternate;
+}
+
+.club-spotlight {
+	position: absolute;
+	top: var(--spotlight-top);
+	left: var(--spotlight-left);
+	width: var(--spotlight-width);
+	height: var(--spotlight-height);
+	transform-origin: var(--spotlight-origin);
+	clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%);
+	background:
+		radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.35), transparent 16%),
+		linear-gradient(to bottom, var(--spotlight-color), rgba(255, 255, 255, 0));
+	filter: blur(12px);
+	mix-blend-mode: screen;
+	opacity: var(--spotlight-opacity);
+	animation: var(--spotlight-animation) var(--spotlight-speed) ease-in-out infinite alternate;
+}
+
+.club-spotlight-a {
+	--spotlight-top: -9%;
+	--spotlight-left: -18%;
+	--spotlight-width: 42vw;
+	--spotlight-height: 118%;
+	--spotlight-origin: 58% 0%;
+	--spotlight-color: rgba(236, 72, 153, 0.42);
+	--spotlight-opacity: 0.58;
+	--spotlight-animation: spotlight-dance-a;
+	--spotlight-speed: 6.4s;
+}
+
+.club-spotlight-b {
+	--spotlight-top: -11%;
+	--spotlight-left: 2%;
+	--spotlight-width: 34vw;
+	--spotlight-height: 122%;
+	--spotlight-origin: 44% 0%;
+	--spotlight-color: rgba(34, 211, 238, 0.42);
+	--spotlight-opacity: 0.6;
+	--spotlight-animation: spotlight-dance-b;
+	--spotlight-speed: 7.2s;
+}
+
+.club-spotlight-c {
+	--spotlight-top: -12%;
+	--spotlight-left: 22%;
+	--spotlight-width: 32vw;
+	--spotlight-height: 114%;
+	--spotlight-origin: 52% 0%;
+	--spotlight-color: rgba(250, 204, 21, 0.28);
+	--spotlight-opacity: 0.5;
+	--spotlight-animation: spotlight-dance-c;
+	--spotlight-speed: 5.8s;
+}
+
+.club-spotlight-d {
+	--spotlight-top: -10%;
+	--spotlight-left: 46%;
+	--spotlight-width: 36vw;
+	--spotlight-height: 120%;
+	--spotlight-origin: 48% 0%;
+	--spotlight-color: rgba(168, 85, 247, 0.44);
+	--spotlight-opacity: 0.58;
+	--spotlight-animation: spotlight-dance-d;
+	--spotlight-speed: 7.8s;
+}
+
+.club-spotlight-e {
+	--spotlight-top: -9%;
+	--spotlight-left: 70%;
+	--spotlight-width: 40vw;
+	--spotlight-height: 118%;
+	--spotlight-origin: 42% 0%;
+	--spotlight-color: rgba(132, 204, 22, 0.3);
+	--spotlight-opacity: 0.48;
+	--spotlight-animation: spotlight-dance-e;
+	--spotlight-speed: 8.6s;
+}
+
+.club-spotlight-f {
+	--spotlight-top: -12%;
+	--spotlight-left: 90%;
+	--spotlight-width: 34vw;
+	--spotlight-height: 116%;
+	--spotlight-origin: 38% 0%;
+	--spotlight-color: rgba(244, 114, 182, 0.3);
+	--spotlight-opacity: 0.46;
+	--spotlight-animation: spotlight-dance-f;
+	--spotlight-speed: 6.9s;
+}
+
+.club-spotlight-g {
+	--spotlight-top: 10%;
+	--spotlight-left: -34%;
+	--spotlight-width: 46vw;
+	--spotlight-height: 108%;
+	--spotlight-origin: 0% 0%;
+	--spotlight-color: rgba(45, 212, 191, 0.32);
+	--spotlight-opacity: 0.42;
+	--spotlight-animation: spotlight-dance-g;
+	--spotlight-speed: 9.2s;
+}
+
+@keyframes spotlight-dance-a {
+	from {
+		transform: translateX(-8%) rotate(-26deg) scaleY(1.05);
+	}
+	to {
+		transform: translateX(18%) rotate(-8deg) scaleY(0.98);
+	}
+}
+
+@keyframes spotlight-dance-b {
+	from {
+		transform: translateX(12%) rotate(-8deg) scaleY(0.96);
+	}
+	to {
+		transform: translateX(-12%) rotate(15deg) scaleY(1.08);
+	}
+}
+
+@keyframes spotlight-dance-c {
+	from {
+		transform: translateX(-10%) rotate(-4deg) scaleY(1.08);
+	}
+	to {
+		transform: translateX(16%) rotate(10deg) scaleY(0.96);
+	}
+}
+
+@keyframes spotlight-dance-d {
+	from {
+		transform: translateX(-12%) rotate(-14deg) scaleY(1.04);
+	}
+	to {
+		transform: translateX(10%) rotate(8deg) scaleY(0.96);
+	}
+}
+
+@keyframes spotlight-dance-e {
+	from {
+		transform: translateX(-8%) rotate(12deg) scaleY(0.94);
+	}
+	to {
+		transform: translateX(-24%) rotate(-14deg) scaleY(1.08);
+	}
+}
+
+@keyframes spotlight-dance-f {
+	from {
+		transform: translateX(-20%) rotate(18deg) scaleY(1.04);
+	}
+	to {
+		transform: translateX(-42%) rotate(-6deg) scaleY(0.98);
+	}
+}
+
+@keyframes spotlight-dance-g {
+	from {
+		transform: translateX(2%) rotate(58deg) scaleY(1.05);
+	}
+	to {
+		transform: translateX(18%) rotate(38deg) scaleY(0.98);
+	}
+}
+
+@keyframes club-floor-pulse {
+	from {
+		opacity: 0.48;
+		transform: translateX(-4%) scaleX(1);
+	}
+	to {
+		opacity: 0.82;
+		transform: translateX(4%) scaleX(1.08);
+	}
+}
+
 @keyframes swipe-card-jiggle {
 	0%,
 	100% {
