@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes } from 'react';
 
-export type ButtonTheme = 'dark' | 'endAction' | 'ghost' | 'primary' | 'secondary' | 'warning';
-export type ButtonSize = 'icon' | 'md' | 'sm' | 'xl';
+export type ButtonTheme = 'dark' | 'edgeIcon' | 'endAction' | 'ghost' | 'primary' | 'secondary' | 'warning';
+export type ButtonSize = 'icon' | 'miniIcon' | 'md' | 'sm' | 'xl';
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 	size?: ButtonSize;
@@ -10,6 +10,7 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const sizes = {
 	icon: 'h-11 w-11 p-0 text-base',
+	miniIcon: 'h-[22px] min-h-0 w-[22px] p-0 text-xs',
 	md: 'min-h-11 px-3 py-2 text-sm',
 	sm: 'min-h-9 px-2.5 py-1.5 text-sm',
 	xl: 'min-h-12 px-4 py-3 text-base',
@@ -19,6 +20,11 @@ const themes = {
 	dark: {
 		size: 'xl',
 		className: 'border-neutral-950 bg-neutral-950 text-white shadow-[4px_4px_0_#171717]',
+	},
+	edgeIcon: {
+		size: 'miniIcon',
+		className:
+			'border-neutral-950 bg-white text-neutral-950 shadow-[1px_1px_0_#171717] active:shadow-[1px_1px_0_#171717]',
 	},
 	endAction: {
 		size: 'xl',

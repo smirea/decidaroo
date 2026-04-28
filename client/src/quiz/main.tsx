@@ -6,8 +6,9 @@ import { scoreInputToPoints, sumOptionPoints, type OptionPoints, type QuizDefini
 import { asteroidsQuiz } from './asteroids.tsx';
 import { diceRollQuiz } from './diceRoll.tsx';
 import { tinderSwipeQuiz } from './tinderSwipe.tsx';
+import { twentyFortyEightQuiz } from './twentyFortyEight.tsx';
 
-export const quizzes = [tinderSwipeQuiz, diceRollQuiz, asteroidsQuiz] as const;
+export const quizzes = [tinderSwipeQuiz, diceRollQuiz, asteroidsQuiz, twentyFortyEightQuiz] as const;
 const themeSongUrl = '/decidaroo.mp3';
 const soundChoiceKey = 'decidaroo:sound-choice';
 const soundToggleKey = 'decidaroo:sound-on';
