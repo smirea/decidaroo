@@ -1,9 +1,10 @@
 import { Headphones, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
-import { useEffect, useRef, useState } from 'react';
-import { clampScore, averageScore } from './quizScreen.tsx';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { clampScore, averageScore, type QuizDefinition } from './quizScreen.tsx';
+import { diceRollQuiz } from './diceRoll.tsx';
 import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 
-const quizzes = [tinderSwipeQuiz] as const;
+export const quizzes = [tinderSwipeQuiz, diceRollQuiz] as const;
 const themeSongUrl = '/decidaroo.mp3';
 const soundChoiceKey = 'decidaroo:sound-choice';
 const soundToggleKey = 'decidaroo:sound-on';
@@ -120,23 +121,34 @@ function ClubBackground() {
 	);
 }
 
-export function QuizPage() {
+type Navigate = (path: string) => void;
+
+type QuizPageProps = {
+	quizSet?: readonly QuizDefinition[];
+	skipIntro?: boolean;
+};
+
+export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps) {
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
 	const [screenScores, setScreenScores] = useState<number[]>([]);
 	const [results, setResults] = useState<QuizResult[]>([]);
-	const [soundState, setSoundState] = useState(getInitialSoundState);
+	const [soundState, setSoundState] = useState(() => {
+		if (!skipIntro) return getInitialSoundState();
+
+		return { stored: readStoredSoundChoice(), showIntro: false };
+	});
 	const [soundOn, setSoundOn] = useState(readStoredSoundOn);
 	const [themeSongPlaying, setThemeSongPlaying] = useState(false);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 
 	const finalScore = averageScore(results.map(result => result.score));
-	const isDone = results.length === quizzes.length;
-	const currentQuiz = quizzes[quizIndex];
+	const isDone = results.length === quizSet.length;
+	const currentQuiz = quizSet[quizIndex];
 	const currentScreen = currentQuiz?.screens[screenIndex];
-	const totalScreens = quizzes.reduce((total, quiz) => total + quiz.screens.length, 0);
+	const totalScreens = quizSet.reduce((total, quiz) => total + quiz.screens.length, 0);
 	const completedScreens = results.reduce((total, result) => total + result.screens.length, 0) + screenIndex;
-	const progress = isDone ? 100 : Math.round((completedScreens / totalScreens) * 100);
+	const progress = isDone || totalScreens === 0 ? 100 : Math.round((completedScreens / totalScreens) * 100);
 	const activeScore = screenScores.length > 0 ? averageScore(screenScores) : '--';
 
 	useEffect(() => {
@@ -370,16 +382,87 @@ export function QuizPage() {
 						</div>
 					</header>
 					<div className='min-h-0 flex-1 overflow-visible'>
-						<currentQuiz.Screen
-							config={currentScreen}
-							key={`${currentQuiz.id}-${screenIndex}`}
-							screenCount={currentQuiz.screens.length}
-							screenNumber={screenIndex + 1}
-							submit={submit}
-						/>
+						<Suspense
+							fallback={
+								<div className='flex h-full items-center justify-center text-lg font-black text-white'>
+									loading nonsense...
+								</div>
+							}
+						>
+							<currentQuiz.Screen
+								config={currentScreen}
+								key={`${currentQuiz.id}-${screenIndex}`}
+								screenCount={currentQuiz.screens.length}
+								screenNumber={screenIndex + 1}
+								submit={submit}
+							/>
+						</Suspense>
 					</div>
 				</section>
 			) : null}
 		</main>
 	);
+}
+
+export function QuizTestIndex({ navigate }: { navigate: Navigate }) {
+	return (
+		<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+			<ClubBackground />
+			<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col justify-center gap-5 p-4 text-white sm:h-[760px] sm:max-h-full sm:p-0'>
+				<div className='space-y-2'>
+					<p className='text-xs font-bold uppercase text-cyan-200'>test mode</p>
+					<h1 className='text-4xl font-black leading-none'>Pick a quiz</h1>
+				</div>
+
+				<div className='grid gap-3'>
+					{quizzes.map(quiz => (
+						<button
+							className='rounded-lg border-2 border-neutral-950 bg-white p-4 text-left text-neutral-950 shadow-[5px_5px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[2px_2px_0_#171717]'
+							key={quiz.id}
+							onClick={() => navigate(`/test/${quiz.id}`)}
+							type='button'
+						>
+							<span className='block text-lg font-black'>{quiz.title}</span>
+							<span className='mt-1 block text-sm font-bold text-neutral-500'>
+								{quiz.screens.length} {quiz.screens.length === 1 ? 'screen' : 'screens'}
+							</span>
+						</button>
+					))}
+				</div>
+
+				<button
+					className='min-h-12 rounded-lg border-2 border-white/80 bg-transparent px-4 py-3 text-base font-black text-white active:translate-y-px'
+					onClick={() => navigate('/')}
+					type='button'
+				>
+					Back to the real thing
+				</button>
+			</section>
+		</main>
+	);
+}
+
+export function QuizTestPage({ navigate, quizId }: { navigate: Navigate; quizId: string }) {
+	const quiz = quizzes.find(candidate => candidate.id === quizId);
+
+	if (!quiz) {
+		return (
+			<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+				<ClubBackground />
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col justify-center gap-4 p-4 text-white sm:h-[760px] sm:max-h-full sm:p-0'>
+					<p className='text-xs font-bold uppercase text-rose-200'>missing quiz</p>
+					<h1 className='text-4xl font-black leading-none'>No such nonsense</h1>
+					<button
+						className='min-h-12 rounded-lg bg-white px-4 py-3 text-base font-black text-neutral-950 active:translate-y-px'
+						onClick={() => navigate('/test')}
+						type='button'
+					>
+						Back to test mode
+					</button>
+				</section>
+			</main>
+		);
+	}
+
+	return <QuizPage key={quiz.id} quizSet={[quiz]} skipIntro />;
 }

@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, LazyExoticComponent } from 'react';
 
 export type SubmitScore = (score: number) => void;
 
@@ -9,12 +9,16 @@ export type QuizScreenProps<TConfig> = {
 	submit: SubmitScore;
 };
 
+type ScreenComponent<TConfig> =
+	| ComponentType<QuizScreenProps<TConfig>>
+	| LazyExoticComponent<ComponentType<QuizScreenProps<TConfig>>>;
+
 export type QuizDefinition = {
 	id: string;
 	title: string;
 	tagline: string;
 	screens: readonly unknown[];
-	Screen: ComponentType<QuizScreenProps<unknown>>;
+	Screen: ScreenComponent<unknown>;
 	score: (screenScores: readonly number[]) => number;
 };
 
@@ -23,7 +27,7 @@ type QuizConfig<TScreenConfig> = {
 	title: string;
 	tagline: string;
 	screens: readonly TScreenConfig[];
-	Screen: ComponentType<QuizScreenProps<TScreenConfig>>;
+	Screen: ScreenComponent<TScreenConfig>;
 	score?: (screenScores: readonly number[]) => number;
 };
 
@@ -43,7 +47,7 @@ export function quizScreen<TScreenConfig>(config: QuizConfig<TScreenConfig>): Qu
 		title: config.title,
 		tagline: config.tagline,
 		screens: config.screens,
-		Screen: config.Screen as unknown as ComponentType<QuizScreenProps<unknown>>,
+		Screen: config.Screen as unknown as ScreenComponent<unknown>,
 		score: config.score ?? averageScore,
 	};
 }

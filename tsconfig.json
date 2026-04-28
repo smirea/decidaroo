@@ -19,6 +19,9 @@
 		"noFallthroughCasesInSwitch": true,
 		// "noUncheckedIndexedAccess": true, // annoying
 		"noImplicitOverride": true,
+		"paths": {
+			"shared/*": ["./shared/*"]
+		},
 
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
