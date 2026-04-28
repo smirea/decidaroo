@@ -407,20 +407,25 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 						<div className='space-y-3'>
 							{results.map(result => (
 								<div className='rounded-lg border border-neutral-200 bg-neutral-50 p-3' key={result.id}>
-									<h3 className='font-black'>{result.title}</h3>
-									<div className='mt-3 space-y-2'>
-										{result.screens.map((screen, index) => (
-											<div
-												className='grid grid-cols-[1fr_auto] items-center gap-3 text-sm'
-												key={`${result.id}-${screen.title}`}
-											>
-												<span className='font-semibold text-neutral-700'>
-													{index + 1}. {screen.title}
-												</span>
-												<ScreenPointChips points={screen.points} />
-											</div>
-										))}
+									<div className='grid grid-cols-[1fr_auto] items-center gap-3'>
+										<h3 className='font-black'>{result.title}</h3>
+										{result.screens.length === 1 ? <ScreenPointChips points={result.points} /> : null}
 									</div>
+									{result.screens.length > 1 ? (
+										<div className='mt-3 space-y-2'>
+											{result.screens.map((screen, index) => (
+												<div
+													className='grid grid-cols-[1fr_auto] items-center gap-3 text-sm'
+													key={`${result.id}-${screen.title}`}
+												>
+													<span className='font-semibold text-neutral-700'>
+														{index + 1}. {screen.title}
+													</span>
+													<ScreenPointChips points={screen.points} />
+												</div>
+											))}
+										</div>
+									) : null}
 								</div>
 							))}
 						</div>
