@@ -263,3 +263,26 @@ textarea {
 .swipe-card-idle {
 	animation: swipe-card-jiggle 3.4s ease-in-out infinite;
 }
+
+@keyframes score-delta-float {
+	0% {
+		opacity: 0;
+		transform: translate(-50%, -4px) scale(0.82);
+	}
+	18% {
+		opacity: 1;
+		transform: translate(-50%, 0) scale(1);
+	}
+	74% {
+		opacity: 1;
+		transform: translate(-50%, 14px) scale(1);
+	}
+	100% {
+		opacity: 0;
+		transform: translate(-50%, 24px) scale(0.92);
+	}
+}
+
+.score-delta-float {
+	animation: score-delta-float 760ms ease-out forwards;
+}
