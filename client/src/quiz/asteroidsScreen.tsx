@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { emptyOptionPoints, type OptionPoints, type QuizScreenProps } from './quizScreen.tsx';
 
@@ -76,8 +77,8 @@ type ShipParts = {
 };
 
 const gameMs = 60_000;
-const baseFireInterval = 1000;
-const coastingSpeed = 0.38;
+const baseFireInterval = 850;
+const coastingSpeed = 0.32;
 const shipAcceleration = 7.4;
 const shipBrake = 5.6;
 const shipMaxSpeed = 3;
@@ -1014,26 +1015,17 @@ export default function AsteroidsScreen({ submit }: QuizScreenProps<AsteroidsScr
 				) : null}
 				<CompactScoreHud bumps={scoreBumps} effects={scoreEffects} remaining={remaining} scores={displayScores} />
 				{finished ? (
-					<div className='pointer-events-none absolute inset-0 flex items-center justify-center bg-neutral-950/45 p-4'>
+					<div className='absolute inset-0 flex items-center justify-center bg-neutral-950/45 p-4'>
 						<div className='rounded-lg border-2 border-neutral-950 bg-white p-4 text-center text-neutral-950 shadow-[5px_5px_0_#171717]'>
 							<p className='text-xs font-black uppercase text-fuchsia-700'>final score</p>
 							<div className='mt-3 min-w-56'>
 								<ScoreChips scores={scores} />
 							</div>
+							<Button className='mt-3' onClick={() => submit(scores)} theme='endAction'>
+								I did my part
+							</Button>
 						</div>
 					</div>
-				) : null}
-			</div>
-
-			<div className='grid shrink-0 gap-3'>
-				{finished ? (
-					<button
-						className='min-h-12 rounded-lg bg-white px-4 py-3 text-base font-black text-neutral-950 shadow-[4px_4px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[2px_2px_0_#171717]'
-						onClick={() => submit(scores)}
-						type='button'
-					>
-						lock in scores
-					</button>
 				) : null}
 			</div>
 		</div>

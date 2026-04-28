@@ -1,6 +1,7 @@
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { pointsForOption, type QuizScreenProps } from './quizScreen.tsx';
 
@@ -625,16 +626,15 @@ export default function DiceRollScreen({ submit }: QuizScreenProps<DiceScreenCon
 			</div>
 
 			<div className='grid w-full gap-3'>
-				<button
-					className='min-h-12 rounded-lg bg-white px-4 py-3 text-base font-black text-neutral-950 shadow-[4px_4px_0_#171717] disabled:translate-x-0 disabled:translate-y-0 disabled:bg-neutral-200 disabled:text-neutral-500 disabled:shadow-[2px_2px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[2px_2px_0_#171717]'
+				<Button
 					disabled={!hasRolled || rolling}
 					onClick={() => {
 						if (result) submit(pointsForOption(result.option.name, result.points));
 					}}
-					type='button'
+					theme='endAction'
 				>
 					{acceptButtonText()}
-				</button>
+				</Button>
 
 				<button
 					className='min-h-12 rounded-lg border-2 border-neutral-950 bg-yellow-200 px-4 py-3 text-base font-black text-neutral-950 shadow-[4px_4px_0_#171717] disabled:translate-x-0 disabled:translate-y-0 disabled:bg-neutral-200 disabled:text-neutral-500 disabled:shadow-[2px_2px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[2px_2px_0_#171717]'

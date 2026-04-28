@@ -1,5 +1,6 @@
 import { Headphones, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { scoreInputToPoints, sumOptionPoints, type OptionPoints, type QuizDefinition } from './quizScreen.tsx';
 import { asteroidsQuiz } from './asteroids.tsx';
@@ -424,13 +425,9 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 							))}
 						</div>
 
-						<button
-							className='mt-auto min-h-12 rounded-lg bg-neutral-950 px-4 py-3 text-base font-black text-white active:translate-y-px'
-							onClick={restart}
-							type='button'
-						>
+						<Button className='mt-auto' onClick={restart} theme='endAction'>
 							Run the nonsense again
-						</button>
+						</Button>
 					</section>
 				</section>
 			) : currentQuiz && currentScreen ? (
