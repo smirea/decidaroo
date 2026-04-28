@@ -80,6 +80,8 @@ const gameMs = 60_000;
 const baseFireInterval = 850;
 const coastingSpeed = 0.32;
 const shipAcceleration = 7.4;
+const shipInitialAcceleration = 12.2;
+const shipInitialAccelerationMaxSpeed = 1.35;
 const shipBrake = 5.6;
 const shipMaxSpeed = 3;
 const shipRadius = 0.14;
@@ -667,7 +669,9 @@ function AsteroidsField({
 					slowToCoast();
 				} else {
 					const previousSpeed = shipState.velocity.length();
-					const nextSpeed = Math.min(shipMaxSpeed, Math.max(previousSpeed, coastingSpeed) + shipAcceleration * delta);
+					const acceleration =
+						previousSpeed < shipInitialAccelerationMaxSpeed ? shipInitialAcceleration : shipAcceleration;
+					const nextSpeed = Math.min(shipMaxSpeed, Math.max(previousSpeed, coastingSpeed) + acceleration * delta);
 					const desiredVelocity = direction.clone().multiplyScalar(nextSpeed);
 					shipState.velocity.lerp(desiredVelocity, clamp(shipSteering * delta, 0, 1));
 					if (shipState.velocity.length() > shipMaxSpeed) shipState.velocity.setLength(shipMaxSpeed);
