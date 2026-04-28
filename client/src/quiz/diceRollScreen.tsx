@@ -2,7 +2,7 @@ import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { useEffect, useRef, useState } from 'react';
 import { decidingOptions } from '../../../shared/constants.ts';
-import type { QuizScreenProps } from './quizScreen.tsx';
+import { pointsForOption, type QuizScreenProps } from './quizScreen.tsx';
 
 type DiceScreenConfig = {
 	title: string;
@@ -20,17 +20,11 @@ type Face = {
 	normal: THREE.Vector3;
 };
 
-const diceFaceCount = 24;
-const pointsPerOption = diceFaceCount / decidingOptions.length;
 const dieRadius = 0.62;
 const floorY = -0.82;
 
 function diceLabel(result: DiceResult) {
 	return `${result.points}`;
-}
-
-function resultToScore(result: DiceResult) {
-	return Math.round((result.points / pointsPerOption) * 100);
 }
 
 function vectorLength(vector: CANNON.Vec3) {
@@ -635,7 +629,7 @@ export default function DiceRollScreen({ submit }: QuizScreenProps<DiceScreenCon
 					className='min-h-12 rounded-lg bg-white px-4 py-3 text-base font-black text-neutral-950 shadow-[4px_4px_0_#171717] disabled:translate-x-0 disabled:translate-y-0 disabled:bg-neutral-200 disabled:text-neutral-500 disabled:shadow-[2px_2px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[2px_2px_0_#171717]'
 					disabled={!hasRolled || rolling}
 					onClick={() => {
-						if (result) submit(resultToScore(result));
+						if (result) submit(pointsForOption(result.option.name, result.points));
 					}}
 					type='button'
 				>

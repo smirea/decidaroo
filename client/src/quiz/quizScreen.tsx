@@ -1,6 +1,8 @@
 import type { ComponentType, LazyExoticComponent } from 'react';
+import { decidingOptions } from '../../../shared/constants.ts';
 
-export type SubmitScore = (score: number) => void;
+export type OptionPoints = Record<string, number>;
+export type SubmitScore = (score: Partial<OptionPoints>) => void;
 
 export type QuizScreenProps<TConfig> = {
 	screenNumber: number;
@@ -19,7 +21,7 @@ export type QuizDefinition = {
 	tagline: string;
 	screens: readonly unknown[];
 	Screen: ScreenComponent<unknown>;
-	score: (screenScores: readonly number[]) => number;
+	score: (screenScores: readonly OptionPoints[]) => OptionPoints;
 };
 
 type QuizConfig<TScreenConfig> = {
@@ -28,17 +30,37 @@ type QuizConfig<TScreenConfig> = {
 	tagline: string;
 	screens: readonly TScreenConfig[];
 	Screen: ScreenComponent<TScreenConfig>;
-	score?: (screenScores: readonly number[]) => number;
+	score?: (screenScores: readonly OptionPoints[]) => OptionPoints;
 };
 
-export function clampScore(score: number) {
-	return Math.max(0, Math.min(100, Math.round(score)));
+function roundPoints(points: number) {
+	return Math.round(points);
 }
 
-export function averageScore(scores: readonly number[]) {
-	if (scores.length === 0) return 0;
+export function emptyOptionPoints() {
+	return Object.fromEntries(decidingOptions.map(option => [option.name, 0])) as OptionPoints;
+}
 
-	return clampScore(scores.reduce((total, score) => total + score, 0) / scores.length);
+export function pointsForOption(optionName: string, points: number) {
+	return { ...emptyOptionPoints(), [optionName]: roundPoints(points) };
+}
+
+export function scoreInputToPoints(score: Partial<OptionPoints>) {
+	const points = emptyOptionPoints();
+
+	for (const option of decidingOptions) points[option.name] = roundPoints(score[option.name] ?? 0);
+
+	return points;
+}
+
+export function sumOptionPoints(scores: readonly OptionPoints[]) {
+	const total = emptyOptionPoints();
+
+	for (const score of scores) {
+		for (const option of decidingOptions) total[option.name] += score[option.name] ?? 0;
+	}
+
+	return total;
 }
 
 export function quizScreen<TScreenConfig>(config: QuizConfig<TScreenConfig>): QuizDefinition {
@@ -48,6 +70,6 @@ export function quizScreen<TScreenConfig>(config: QuizConfig<TScreenConfig>): Qu
 		tagline: config.tagline,
 		screens: config.screens,
 		Screen: config.Screen as unknown as ScreenComponent<unknown>,
-		score: config.score ?? averageScore,
+		score: config.score ?? sumOptionPoints,
 	};
 }

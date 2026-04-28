@@ -1,11 +1,12 @@
 import { ThumbsDown, ThumbsUp } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
-import { quizScreen, type QuizScreenProps } from './quizScreen.tsx';
+import { decidingOptions } from '../../../shared/constants.ts';
+import { pointsForOption, quizScreen, type QuizScreenProps } from './quizScreen.tsx';
 
 type SwipeQuestion = {
 	title: string;
 	question: string;
-	score: number;
+	optionName: (typeof decidingOptions)[number]['name'];
 };
 
 type DragState = {
@@ -40,7 +41,7 @@ function TinderSwipeScreen({ screenNumber, screenCount, config, submit }: QuizSc
 		if (leaving) return;
 
 		setLeaving(answer);
-		window.setTimeout(() => submit(answer === 'yes' ? config.score : 100 - config.score), 180);
+		window.setTimeout(() => submit(pointsForOption(config.optionName, answer === 'yes' ? 2 : -2)), 180);
 	}
 
 	function settleDrag() {
@@ -109,36 +110,58 @@ function TinderSwipeScreen({ screenNumber, screenCount, config, submit }: QuizSc
 	);
 }
 
+const swipeQuestions = [
+	{
+		title: 'Group Patience',
+		question: 'Can everyone handle more than two options?',
+		optionName: 'deci-mate',
+	},
+	{
+		title: 'Drama Forecast',
+		question: 'Will someone argue with the result anyway?',
+		optionName: 'decision-buddy',
+	},
+	{
+		title: 'Time Pressure',
+		question: 'Does this need a decision before snacks disappear?',
+		optionName: 'deci-mate',
+	},
+	{
+		title: 'Fairness Vibes',
+		question: 'Should every person get equal blame for the outcome?',
+		optionName: 'decision-buddy',
+	},
+	{
+		title: 'Chaos Appetite',
+		question: 'Would randomness make this objectively funnier?',
+		optionName: 'deci-mate',
+	},
+	{
+		title: 'Ceremony Budget',
+		question: 'Would a result feel better if it seemed slightly official?',
+		optionName: 'decision-buddy',
+	},
+] as const satisfies SwipeQuestion[];
+
+function assertEqualQuestionCoverage(questions: readonly SwipeQuestion[]) {
+	const counts = new Map(decidingOptions.map(option => [option.name, 0]));
+
+	for (const question of questions) counts.set(question.optionName, (counts.get(question.optionName) ?? 0) + 1);
+
+	const expectedCount = counts.get(decidingOptions[0]?.name ?? '') ?? 0;
+	const unevenOption = decidingOptions.find(option => counts.get(option.name) !== expectedCount);
+
+	if (unevenOption) {
+		throw new Error('Tinder Swipe must have an equal number of questions for each deciding option.');
+	}
+}
+
+assertEqualQuestionCoverage(swipeQuestions);
+
 export const tinderSwipeQuiz = quizScreen<SwipeQuestion>({
 	id: 'tinder-swipe',
 	title: 'Tinder Swipe',
 	tagline: 'A dating app interface for tiny decision science.',
-	screens: [
-		{
-			title: 'Group Patience',
-			question: 'Can everyone handle more than two options?',
-			score: 82,
-		},
-		{
-			title: 'Drama Forecast',
-			question: 'Will someone argue with the result anyway?',
-			score: 34,
-		},
-		{
-			title: 'Time Pressure',
-			question: 'Does this need a decision before snacks disappear?',
-			score: 91,
-		},
-		{
-			title: 'Fairness Vibes',
-			question: 'Should every person get equal blame for the outcome?',
-			score: 68,
-		},
-		{
-			title: 'Chaos Appetite',
-			question: 'Would randomness make this objectively funnier?',
-			score: 76,
-		},
-	],
+	screens: swipeQuestions,
 	Screen: TinderSwipeScreen,
 });

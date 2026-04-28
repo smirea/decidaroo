@@ -1,6 +1,7 @@
 import { Headphones, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { clampScore, averageScore, type QuizDefinition } from './quizScreen.tsx';
+import { decidingOptions } from '../../../shared/constants.ts';
+import { scoreInputToPoints, sumOptionPoints, type OptionPoints, type QuizDefinition } from './quizScreen.tsx';
 import { diceRollQuiz } from './diceRoll.tsx';
 import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 
@@ -12,13 +13,13 @@ const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
 
 type ScreenResult = {
 	title: string;
-	score: number;
+	points: OptionPoints;
 };
 
 type QuizResult = {
 	id: string;
 	title: string;
-	score: number;
+	points: OptionPoints;
 	screens: ScreenResult[];
 };
 
@@ -39,13 +40,6 @@ function screenTitle(screen: unknown, index: number) {
 
 	const title = (screen as { title?: unknown }).title;
 	return typeof title === 'string' ? title : `Screen ${index + 1}`;
-}
-
-function scoreMood(score: number) {
-	if (score >= 85) return 'reckless masterpiece';
-	if (score >= 65) return 'confidently silly';
-	if (score >= 40) return 'medium shrug';
-	return 'suspiciously responsible';
 }
 
 function readStoredSoundChoice(): StoredSoundChoice | null {
@@ -121,6 +115,79 @@ function ClubBackground() {
 	);
 }
 
+function optionPoint(points: OptionPoints, optionName: string) {
+	return points[optionName] ?? 0;
+}
+
+function nonZeroOptions(points: OptionPoints) {
+	return decidingOptions.filter(option => optionPoint(points, option.name) !== 0);
+}
+
+function winningOption(points: OptionPoints) {
+	return decidingOptions.reduce((winner, option) =>
+		optionPoint(points, option.name) > optionPoint(points, winner.name) ? option : winner,
+	);
+}
+
+function ScoreStrip({ points }: { points: OptionPoints }) {
+	const options = nonZeroOptions(points);
+
+	if (options.length === 0) return null;
+
+	return (
+		<div className='grid shrink-0 grid-flow-col gap-2'>
+			{options.map(option => (
+				<div
+					className='min-w-12 rounded-lg border-2 border-neutral-950 px-2 py-2 text-center text-xl font-black leading-none text-neutral-950 shadow-[3px_3px_0_#171717]'
+					key={option.name}
+					style={{ backgroundColor: option.color }}
+				>
+					{optionPoint(points, option.name)}
+				</div>
+			))}
+		</div>
+	);
+}
+
+function PointsBreakdown({ points }: { points: OptionPoints }) {
+	const options = nonZeroOptions(points);
+
+	if (options.length === 0) return null;
+
+	return (
+		<div className='grid grid-cols-2 gap-2'>
+			{options.map(option => (
+				<div
+					className='rounded-lg border-2 border-neutral-950 p-2 text-neutral-950 shadow-[3px_3px_0_#171717]'
+					key={option.name}
+					style={{ backgroundColor: option.color }}
+				>
+					<p className='truncate text-sm font-black'>{option.name}</p>
+					<p className='text-2xl font-black leading-none'>{optionPoint(points, option.name)}</p>
+				</div>
+			))}
+		</div>
+	);
+}
+
+function ScreenPointChips({ points }: { points: OptionPoints }) {
+	const options = nonZeroOptions(points);
+
+	return (
+		<div className='flex gap-1'>
+			{options.map(option => (
+				<span
+					className='min-w-7 rounded border border-neutral-950 px-1.5 py-0.5 text-center font-black text-neutral-950'
+					key={option.name}
+					style={{ backgroundColor: option.color }}
+				>
+					{optionPoint(points, option.name)}
+				</span>
+			))}
+		</div>
+	);
+}
+
 type Navigate = (path: string) => void;
 
 type QuizPageProps = {
@@ -131,7 +198,7 @@ type QuizPageProps = {
 export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps) {
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
-	const [screenScores, setScreenScores] = useState<number[]>([]);
+	const [screenScores, setScreenScores] = useState<OptionPoints[]>([]);
 	const [results, setResults] = useState<QuizResult[]>([]);
 	const [soundState, setSoundState] = useState(() => {
 		if (!skipIntro) return getInitialSoundState();
@@ -142,14 +209,14 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const [themeSongPlaying, setThemeSongPlaying] = useState(false);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 
-	const finalScore = averageScore(results.map(result => result.score));
+	const finalPoints = sumOptionPoints(results.map(result => result.points));
 	const isDone = results.length === quizSet.length;
 	const currentQuiz = quizSet[quizIndex];
 	const currentScreen = currentQuiz?.screens[screenIndex];
 	const totalScreens = quizSet.reduce((total, quiz) => total + quiz.screens.length, 0);
 	const completedScreens = results.reduce((total, result) => total + result.screens.length, 0) + screenIndex;
 	const progress = isDone || totalScreens === 0 ? 100 : Math.round((completedScreens / totalScreens) * 100);
-	const activeScore = screenScores.length > 0 ? averageScore(screenScores) : '--';
+	const activePoints = sumOptionPoints([...results.map(result => result.points), ...screenScores]);
 
 	useEffect(() => {
 		const audio = document.createElement('audio');
@@ -187,10 +254,10 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		setResults([]);
 	}
 
-	function submit(rawScore: number) {
+	function submit(rawScore: Partial<OptionPoints>) {
 		if (!currentQuiz) return;
 
-		const nextScores = [...screenScores, clampScore(rawScore)];
+		const nextScores = [...screenScores, scoreInputToPoints(rawScore)];
 
 		if (screenIndex < currentQuiz.screens.length - 1) {
 			setScreenScores(nextScores);
@@ -201,10 +268,10 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		const nextResult: QuizResult = {
 			id: currentQuiz.id,
 			title: currentQuiz.title,
-			score: currentQuiz.score(nextScores),
-			screens: nextScores.map((score, index) => ({
+			points: currentQuiz.score(nextScores),
+			screens: nextScores.map((points, index) => ({
 				title: screenTitle(currentQuiz.screens[index], index),
-				score,
+				points,
 			})),
 		};
 
@@ -326,33 +393,29 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 					<section className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
 						<div className='flex items-start gap-3'>
 							<SoundButton />
-							<div className='space-y-2'>
+							<div className='flex-1 space-y-3'>
 								<p className='text-xs font-bold uppercase text-fuchsia-700'>final verdict</p>
-								<h2 className='text-4xl font-black leading-none'>{finalScore}</h2>
-								<p className='text-lg font-bold text-neutral-700'>{scoreMood(finalScore)}</p>
+								<h2 className='text-2xl font-black leading-tight text-neutral-950'>
+									{winningOption(finalPoints).name} is what you truly desire
+								</h2>
+								<PointsBreakdown points={finalPoints} />
 							</div>
 						</div>
 
 						<div className='space-y-3'>
 							{results.map(result => (
 								<div className='rounded-lg border border-neutral-200 bg-neutral-50 p-3' key={result.id}>
-									<div className='flex items-start justify-between gap-3'>
-										<div>
-											<h3 className='font-black'>{result.title}</h3>
-											<p className='text-sm font-semibold text-neutral-500'>{scoreMood(result.score)}</p>
-										</div>
-										<p className='text-2xl font-black'>{result.score}</p>
-									</div>
+									<h3 className='font-black'>{result.title}</h3>
 									<div className='mt-3 space-y-2'>
 										{result.screens.map((screen, index) => (
 											<div
-												className='flex items-center justify-between gap-3 text-sm'
+												className='grid grid-cols-[1fr_auto] items-center gap-3 text-sm'
 												key={`${result.id}-${screen.title}`}
 											>
 												<span className='font-semibold text-neutral-700'>
 													{index + 1}. {screen.title}
 												</span>
-												<span className='font-black'>{screen.score}</span>
+												<ScreenPointChips points={screen.points} />
 											</div>
 										))}
 									</div>
@@ -376,10 +439,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 						<div className='h-3 flex-1 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white'>
 							<div className='h-full bg-emerald-500 transition-all' style={{ width: `${progress}%` }} />
 						</div>
-						<div className='rounded-lg border-2 border-neutral-950 bg-sky-300 px-3 py-2 text-center shadow-[3px_3px_0_#171717]'>
-							<p className='text-[10px] font-bold uppercase'>score</p>
-							<p className='text-2xl font-black leading-none'>{activeScore}</p>
-						</div>
+						<ScoreStrip points={activePoints} />
 					</header>
 					<div className='min-h-0 flex-1 overflow-visible'>
 						<Suspense
