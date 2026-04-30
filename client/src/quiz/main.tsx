@@ -4,11 +4,12 @@ import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { scoreInputToPoints, sumOptionPoints, type OptionPoints, type QuizDefinition } from './quizScreen.tsx';
 import { asteroidsQuiz } from './asteroids.tsx';
+import { cockpitQuiz } from './cockpit.tsx';
 import { diceRollQuiz } from './diceRoll.tsx';
 import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 import { twentyFortyEightQuiz } from './twentyFortyEight.tsx';
 
-export const quizzes = [tinderSwipeQuiz, diceRollQuiz, asteroidsQuiz, twentyFortyEightQuiz] as const;
+export const quizzes = [tinderSwipeQuiz, diceRollQuiz, asteroidsQuiz, twentyFortyEightQuiz, cockpitQuiz] as const;
 const themeSongUrl = '/decidaroo.mp3';
 const soundChoiceKey = 'decidaroo:sound-choice';
 const soundToggleKey = 'decidaroo:sound-on';

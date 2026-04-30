@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { emptyOptionPoints, type OptionPoints, type QuizScreenProps } from './quizScreen.tsx';
+import { addOptionScore, CompactScoreHud, ScoreChips, type ScoreDelta, useAnimatedScores } from './scoreHud.tsx';
 
 type AsteroidsScreenConfig = {
 	title: string;
@@ -10,18 +11,6 @@ type AsteroidsScreenConfig = {
 
 type DecidingOption = (typeof decidingOptions)[number];
 type AsteroidSize = 'small' | 'big';
-
-type ScoreDelta = {
-	optionName: string;
-	delta: number;
-	scores: OptionPoints;
-};
-
-type ScoreEffect = {
-	id: number;
-	optionName: string;
-	delta: number;
-};
 
 type Bounds = {
 	width: number;
@@ -101,10 +90,6 @@ function randomBetween(min: number, max: number) {
 
 function randomOption() {
 	return decidingOptions[Math.floor(Math.random() * decidingOptions.length)] ?? decidingOptions[0];
-}
-
-function cloneScores(scores: OptionPoints) {
-	return { ...scores };
 }
 
 function rotateVector(vector: THREE.Vector2, radians: number) {
@@ -292,73 +277,6 @@ function readPointerWorldPoint(event: React.PointerEvent<HTMLDivElement>, camera
 	const y = -(((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1);
 	const point = new THREE.Vector3(x, y, 0).unproject(camera);
 	return new THREE.Vector2(point.x, point.y);
-}
-
-function ScoreChips({ scores }: { scores: OptionPoints }) {
-	return (
-		<div className='grid grid-cols-2 gap-2'>
-			{decidingOptions.map(option => (
-				<div
-					className='rounded-lg border-2 border-neutral-950 px-3 py-2 text-neutral-950 shadow-[3px_3px_0_#171717]'
-					key={option.name}
-					style={{ backgroundColor: option.color }}
-				>
-					<p className='truncate text-xs font-black uppercase'>{option.name}</p>
-					<p className='text-2xl font-black leading-none'>{scores[option.name] ?? 0}</p>
-				</div>
-			))}
-		</div>
-	);
-}
-
-function CompactScoreHud({
-	bumps,
-	effects,
-	remaining,
-	scores,
-}: {
-	bumps: Record<string, number>;
-	effects: ScoreEffect[];
-	remaining: number;
-	scores: OptionPoints;
-}) {
-	return (
-		<div className='pointer-events-none absolute left-3 right-3 top-3 z-20 flex items-start gap-2'>
-			<div className='shrink-0 rounded-lg border-2 border-neutral-950 bg-white px-3 py-2 text-xl font-black leading-none text-neutral-950 shadow-[3px_3px_0_#171717]'>
-				{remaining}
-			</div>
-			<div className='flex flex-1 flex-wrap justify-end gap-2'>
-				{decidingOptions.map(option => (
-					<div className='relative' key={option.name}>
-						<div
-							aria-label={`${option.name} score ${scores[option.name] ?? 0}`}
-							className='min-w-10 rounded-lg border-2 border-neutral-950 px-2 py-2 text-center text-xl font-black leading-none text-neutral-950 shadow-[3px_3px_0_#171717] transition-transform duration-200'
-							style={{
-								backgroundColor: option.color,
-								transform: bumps[option.name] ? 'translateY(-2px) scale(1.12)' : undefined,
-							}}
-						>
-							{scores[option.name] ?? 0}
-						</div>
-						{effects
-							.filter(effect => effect.optionName === option.name)
-							.map(effect => (
-								<div
-									className={`score-delta-float absolute left-1/2 top-full mt-1 rounded border-2 border-neutral-950 px-2 py-1 text-sm font-black leading-none shadow-[2px_2px_0_#171717] ${
-										effect.delta < 0 ? 'bg-red-500 text-white' : 'text-neutral-950'
-									}`}
-									key={effect.id}
-									style={{ backgroundColor: effect.delta < 0 ? undefined : option.color }}
-								>
-									{effect.delta > 0 ? '+' : ''}
-									{effect.delta}
-								</div>
-							))}
-					</div>
-				))}
-			</div>
-		</div>
-	);
 }
 
 function AsteroidsField({
@@ -563,12 +481,9 @@ function AsteroidsField({
 
 		function addScore(asteroid: Asteroid) {
 			const delta = pointsForAsteroid(asteroid);
-			scoresRef.current = {
-				...scoresRef.current,
-				[asteroid.option.name]: (scoresRef.current[asteroid.option.name] ?? 0) + delta,
-			};
-			const nextScores = cloneScores(scoresRef.current);
-			onScoresChangeRef.current(nextScores, { optionName: asteroid.option.name, delta, scores: nextScores });
+			const scored = addOptionScore(scoresRef.current, asteroid.option.name, delta);
+			scoresRef.current = scored.scores;
+			onScoresChangeRef.current(scored.scores, scored.delta);
 		}
 
 		function removePointFromLeader() {
@@ -581,11 +496,8 @@ function AsteroidsField({
 
 			if (leaderScore <= 0) return;
 
-			scoresRef.current = {
-				...scoresRef.current,
-				[leader.name]: Math.max(0, leaderScore - 1),
-			};
-			const nextScores = cloneScores(scoresRef.current);
+			const nextScores = { ...scoresRef.current, [leader.name]: Math.max(0, leaderScore - 1) };
+			scoresRef.current = nextScores;
 			onScoresChangeRef.current(nextScores, { optionName: leader.name, delta: -1, scores: nextScores });
 		}
 
@@ -818,7 +730,7 @@ function AsteroidsField({
 
 			finishedRef.current = true;
 			onRemainingChangeRef.current(0);
-			onFinishedRef.current(cloneScores(scoresRef.current));
+			onFinishedRef.current({ ...scoresRef.current });
 		}
 
 		function animate() {
@@ -931,13 +843,9 @@ export default function AsteroidsScreen({ submit }: QuizScreenProps<AsteroidsScr
 	const [finished, setFinished] = useState(false);
 	const [hitFlash, setHitFlash] = useState(false);
 	const [remaining, setRemaining] = useState(60);
-	const [scores, setScores] = useState<OptionPoints>(() => emptyOptionPoints());
-	const [displayScores, setDisplayScores] = useState<OptionPoints>(() => emptyOptionPoints());
-	const [scoreBumps, setScoreBumps] = useState<Record<string, number>>({});
-	const [scoreEffects, setScoreEffects] = useState<ScoreEffect[]>([]);
-	const effectIdRef = useRef(0);
+	const { clearScoreAnimationTimeouts, displayScores, scoreBumps, scoreEffects, scores, setAnimatedScores } =
+		useAnimatedScores();
 	const flashTimeoutRef = useRef<number | null>(null);
-	const scoreTimeoutsRef = useRef<number[]>([]);
 
 	useEffect(
 		() => () => {
@@ -953,48 +861,8 @@ export default function AsteroidsScreen({ submit }: QuizScreenProps<AsteroidsScr
 		flashTimeoutRef.current = window.setTimeout(() => setHitFlash(false), 150);
 	}
 
-	function clearScoreAnimationTimeouts() {
-		for (const timeout of scoreTimeoutsRef.current) window.clearTimeout(timeout);
-		scoreTimeoutsRef.current = [];
-	}
-
-	function scheduleScoreAnimation(callback: () => void, delay: number) {
-		const timeout = window.setTimeout(() => {
-			scoreTimeoutsRef.current = scoreTimeoutsRef.current.filter(item => item !== timeout);
-			callback();
-		}, delay);
-		scoreTimeoutsRef.current.push(timeout);
-	}
-
-	function removeScoreBump(optionName: string, bumpId: number) {
-		setScoreBumps(current => {
-			if (current[optionName] !== bumpId) return current;
-
-			const next = { ...current };
-			delete next[optionName];
-			return next;
-		});
-	}
-
 	function handleScoresChange(nextScores: OptionPoints, delta?: ScoreDelta) {
-		setScores(nextScores);
-
-		if (!delta) {
-			setDisplayScores(nextScores);
-			return;
-		}
-
-		const effectId = effectIdRef.current + 1;
-		effectIdRef.current = effectId;
-		setScoreEffects(current => [...current, { id: effectId, optionName: delta.optionName, delta: delta.delta }]);
-		scheduleScoreAnimation(() => {
-			setScoreEffects(current => current.filter(effect => effect.id !== effectId));
-		}, 760);
-		scheduleScoreAnimation(() => {
-			setDisplayScores(delta.scores);
-			setScoreBumps(current => ({ ...current, [delta.optionName]: effectId }));
-			scheduleScoreAnimation(() => removeScoreBump(delta.optionName, effectId), 220);
-		}, 360);
+		setAnimatedScores(nextScores, delta);
 	}
 
 	return (
@@ -1003,11 +871,8 @@ export default function AsteroidsScreen({ submit }: QuizScreenProps<AsteroidsScr
 				<AsteroidsField
 					finished={finished}
 					onFinished={nextScores => {
-						clearScoreAnimationTimeouts();
-						setScoreBumps({});
-						setScoreEffects([]);
-						setScores(nextScores);
-						setDisplayScores(nextScores);
+						clearScoreAnimationTimeouts(true);
+						setAnimatedScores(nextScores);
 						setFinished(true);
 					}}
 					onRemainingChange={setRemaining}
