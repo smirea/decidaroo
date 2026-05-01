@@ -15,9 +15,11 @@ import { cockpitQuiz } from './cockpit.tsx';
 import { diceRollQuiz } from './diceRoll.tsx';
 import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 import { twentyFortyEightQuiz } from './twentyFortyEight.tsx';
+import { VersusIntro } from './versusIntro.tsx';
 
 export const quizzes = [tinderSwipeQuiz, twentyFortyEightQuiz, asteroidsQuiz, cockpitQuiz, diceRollQuiz] as const;
-const themeSongUrl = '/decideroo.mp3';
+const themeSongUrl = '/decidaroo.mp3';
+const versusSoundUrl = '/sfx/vs-intro.wav';
 const soundChoiceKey = 'decideroo:sound-choice';
 const soundToggleKey = 'decideroo:sound-on';
 const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
@@ -373,9 +375,12 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 		return { stored: readStoredSoundChoice(), showIntro: false };
 	});
-	const [soundOn, setSoundOn] = useState(readStoredSoundOn);
+	const [, setSoundOn] = useState(readStoredSoundOn);
 	const [themeSongPlaying, setThemeSongPlaying] = useState(false);
+	const [showVersusIntro, setShowVersusIntro] = useState(!skipIntro);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
+	const versusAudioRef = useRef<HTMLAudioElement | null>(null);
+	const versusSoundAttemptedRef = useRef(false);
 
 	const finalPoints = sumOptionPoints(results.map(result => result.points));
 	const isDone = results.length === quizSet.length;
@@ -389,39 +394,50 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 	useEffect(() => {
 		const audio = document.createElement('audio');
+		const versusAudio = document.createElement('audio');
+
 		audio.src = themeSongUrl;
 		audio.loop = true;
 		audio.preload = 'auto';
 		audio.hidden = true;
 		audio.setAttribute('aria-hidden', 'true');
+		versusAudio.src = versusSoundUrl;
+		versusAudio.preload = 'auto';
+		versusAudio.hidden = true;
+		versusAudio.setAttribute('aria-hidden', 'true');
 		audioRef.current = audio;
+		versusAudioRef.current = versusAudio;
 		const syncAudioState = () => setThemeSongPlaying(!audio.paused);
 
 		audio.addEventListener('play', syncAudioState);
 		audio.addEventListener('pause', syncAudioState);
 		audio.addEventListener('ended', syncAudioState);
-		document.body.append(audio);
+		document.body.append(audio, versusAudio);
 		audio.load();
-
-		if (soundOn && soundState.stored?.choice === 'yes') void playThemeSong();
+		versusAudio.load();
 
 		return () => {
 			audio.removeEventListener('play', syncAudioState);
 			audio.removeEventListener('pause', syncAudioState);
 			audio.removeEventListener('ended', syncAudioState);
 			audio.pause();
+			versusAudio.pause();
 			audio.remove();
+			versusAudio.remove();
 			audioRef.current = null;
+			versusAudioRef.current = null;
 			setThemeSongPlaying(false);
 		};
 	}, []);
 
 	function restart() {
+		versusSoundAttemptedRef.current = false;
 		setQuizIndex(0);
 		setScreenIndex(0);
 		setScreenScores([]);
 		setLiveScreenScore(scoreInputToPoints({}));
 		setResults([]);
+		setShowVersusIntro(!skipIntro);
 	}
 
 	function submit(rawScore: Partial<OptionPoints>, details?: readonly ScoreDetail[]) {
@@ -488,8 +504,24 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		writeStoredSoundOn(on);
 	}
 
+	async function playVersusIntroSound() {
+		const audio = versusAudioRef.current;
+		if (!audio) return false;
+
+		versusSoundAttemptedRef.current = true;
+		audio.currentTime = 0;
+		audio.volume = 1;
+		try {
+			await audio.play();
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	function chooseSound(choice: SoundChoice) {
 		const stored = writeStoredSoundChoice(choice);
+		void playVersusIntroSound();
 		setSoundState({ stored, showIntro: false });
 
 		const nextSoundOn = choice === 'yes';
@@ -500,7 +532,16 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 			return;
 		}
 
-		void playThemeSong().then(saveThemeSongIntent);
+		saveThemeSongIntent(true);
+	}
+
+	function finishVersusIntro() {
+		const stored = writeStoredSoundChoice('yes');
+
+		setSoundState({ stored, showIntro: false });
+		saveThemeSongIntent(true);
+		void playThemeSong();
+		setShowVersusIntro(false);
 	}
 
 	function toggleThemeSong() {
@@ -515,6 +556,15 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 		void playThemeSong().then(saveThemeSongIntent);
 	}
+
+	useEffect(() => {
+		if (soundState.showIntro || !showVersusIntro || versusSoundAttemptedRef.current) return;
+
+		void playVersusIntroSound().then(played => {
+			if (played) return;
+			setSoundState(current => (current.showIntro ? current : { ...current, showIntro: true }));
+		});
+	}, [showVersusIntro, soundState.showIntro]);
 
 	function SoundButton() {
 		return (
@@ -555,6 +605,15 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 						</div>
 					</div>
 				</section>
+			</main>
+		);
+	}
+
+	if (showVersusIntro) {
+		return (
+			<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+				<ClubBackground />
+				<VersusIntro onReady={finishVersusIntro} />
 			</main>
 		);
 	}
