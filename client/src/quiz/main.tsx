@@ -17,9 +17,9 @@ import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 import { twentyFortyEightQuiz } from './twentyFortyEight.tsx';
 
 export const quizzes = [tinderSwipeQuiz, twentyFortyEightQuiz, asteroidsQuiz, cockpitQuiz, diceRollQuiz] as const;
-const themeSongUrl = '/decidaroo.mp3';
-const soundChoiceKey = 'decidaroo:sound-choice';
-const soundToggleKey = 'decidaroo:sound-on';
+const themeSongUrl = '/decideroo.mp3';
+const soundChoiceKey = 'decideroo:sound-choice';
+const soundToggleKey = 'decideroo:sound-on';
 const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
 
 type ScreenResult = {

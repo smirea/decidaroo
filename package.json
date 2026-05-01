@@ -1,5 +1,5 @@
 {
-	"name": "decidaroo",
+	"name": "decideroo",
 	"private": true,
 	"scripts": {
 		"lint": "oxlint --fix && oxfmt",
