@@ -426,7 +426,10 @@ textarea {
 		transform: translateY(0);
 	}
 	76% {
-		transform: translateY(-0.075em);
+		transform: translateY(-0.11em);
+	}
+	79% {
+		transform: translateY(0.025em);
 	}
 	80% {
 		transform: translateY(0);
