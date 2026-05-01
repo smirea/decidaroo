@@ -1,11 +1,9 @@
-import { lazy } from 'react';
+import DiceRollScreen from './diceRollScreen.tsx';
 import { quizScreen } from './quizScreen.tsx';
 
 type DiceScreenConfig = {
 	title: string;
 };
-
-const DiceRollScreen = lazy(() => import('./diceRollScreen.tsx'));
 
 export const diceRollQuiz = quizScreen<DiceScreenConfig>({
 	id: 'dice-roll',

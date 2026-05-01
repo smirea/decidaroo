@@ -9,7 +9,7 @@ import { diceRollQuiz } from './diceRoll.tsx';
 import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 import { twentyFortyEightQuiz } from './twentyFortyEight.tsx';
 
-export const quizzes = [tinderSwipeQuiz, diceRollQuiz, asteroidsQuiz, twentyFortyEightQuiz, cockpitQuiz] as const;
+export const quizzes = [tinderSwipeQuiz, twentyFortyEightQuiz, asteroidsQuiz, cockpitQuiz, diceRollQuiz] as const;
 const themeSongUrl = '/decidaroo.mp3';
 const soundChoiceKey = 'decidaroo:sound-choice';
 const soundToggleKey = 'decidaroo:sound-on';

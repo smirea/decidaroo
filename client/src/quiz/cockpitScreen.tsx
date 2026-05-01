@@ -1023,7 +1023,7 @@ export default function CockpitScreen({ submit }: QuizScreenProps<CockpitScreenC
 				{finished ? (
 					<div className='absolute inset-0 z-40 flex items-center justify-center bg-neutral-950/45 p-4'>
 						<div className='w-full max-w-xs rounded-lg border-2 border-neutral-950 bg-white p-4 text-center text-neutral-950 shadow-[5px_5px_0_#171717]'>
-							<p className='text-xs font-black uppercase text-orange-700'>final dashboard nonsense</p>
+							<p className='text-xs font-black uppercase text-orange-700'>final cockpit nonsense</p>
 							<div className='mt-3'>
 								<ScoreChips scores={scores} />
 							</div>

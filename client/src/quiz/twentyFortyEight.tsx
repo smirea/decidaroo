@@ -1,11 +1,9 @@
-import { lazy } from 'react';
 import { quizScreen } from './quizScreen.tsx';
+import TwentyFortyEightScreen from './twentyFortyEightScreen.tsx';
 
 type TwentyFortyEightScreenConfig = {
 	title: string;
 };
-
-const TwentyFortyEightScreen = lazy(() => import('./twentyFortyEightScreen.tsx'));
 
 export const twentyFortyEightQuiz = quizScreen<TwentyFortyEightScreenConfig>({
 	id: '2048',

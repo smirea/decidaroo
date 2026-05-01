@@ -14,6 +14,9 @@ const allowedHosts = env.CLIENT_HOST ? [env.CLIENT_HOST] : [];
 
 // https://vite.dev/config/
 export default defineConfig({
+	optimizeDeps: {
+		include: ['cannon-es', 'motion/react', 'three'],
+	},
 	resolve: {
 		tsconfigPaths: true,
 	},

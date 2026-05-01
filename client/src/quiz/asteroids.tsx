@@ -1,11 +1,9 @@
-import { lazy } from 'react';
+import AsteroidsScreen from './asteroidsScreen.tsx';
 import { quizScreen } from './quizScreen.tsx';
 
 type AsteroidsScreenConfig = {
 	title: string;
 };
-
-const AsteroidsScreen = lazy(() => import('./asteroidsScreen.tsx'));
 
 export const asteroidsQuiz = quizScreen<AsteroidsScreenConfig>({
 	id: 'asteroids',
