@@ -1,5 +1,5 @@
 import { Headphones, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { scoreInputToPoints, sumOptionPoints, type OptionPoints, type QuizDefinition } from './quizScreen.tsx';
@@ -38,6 +38,25 @@ type StoredSoundToggle = {
 	on: boolean;
 	at: number;
 };
+
+type PointerTarget = {
+	clientX: number;
+	clientY: number;
+};
+
+type EyeLook = {
+	x: number;
+	y: number;
+};
+
+type EyeLooks = {
+	left: EyeLook;
+	right: EyeLook;
+};
+
+function clamp(value: number, min: number, max: number) {
+	return Math.min(max, Math.max(min, value));
+}
 
 function screenTitle(screen: unknown, index: number) {
 	if (typeof screen !== 'object' || screen === null) return `Screen ${index + 1}`;
@@ -119,6 +138,100 @@ function ClubBackground() {
 	);
 }
 
+function useLogoEyeTracking() {
+	const logoRef = useRef<HTMLDivElement | null>(null);
+	const leftEyeRef = useRef<HTMLSpanElement | null>(null);
+	const rightEyeRef = useRef<HTMLSpanElement | null>(null);
+	const [looks, setLooks] = useState<EyeLooks>({
+		left: { x: 0.16, y: 0.04 },
+		right: { x: 0.16, y: 0.04 },
+	});
+
+	useEffect(() => {
+		let frame = 0;
+		let lastTarget: PointerTarget | null = null;
+
+		const lookForEye = (eye: HTMLSpanElement | null, target: PointerTarget): EyeLook => {
+			if (!eye) return { x: 0, y: 0 };
+
+			const rect = eye.getBoundingClientRect();
+			if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
+
+			const centerX = rect.left + rect.width / 2;
+			const centerY = rect.top + rect.height / 2;
+
+			return {
+				x: clamp((target.clientX - centerX) / (rect.width * 0.78), -1, 1),
+				y: clamp((target.clientY - centerY) / (rect.height * 0.84), -1, 1),
+			};
+		};
+
+		const updateLook = () => {
+			frame = 0;
+			if (!lastTarget) return;
+
+			setLooks({
+				left: lookForEye(leftEyeRef.current, lastTarget),
+				right: lookForEye(rightEyeRef.current, lastTarget),
+			});
+		};
+
+		const scheduleLookUpdate = (event: PointerEvent) => {
+			lastTarget = { clientX: event.clientX, clientY: event.clientY };
+			if (frame === 0) frame = window.requestAnimationFrame(updateLook);
+		};
+
+		const syncLastTarget = () => {
+			if (lastTarget && frame === 0) frame = window.requestAnimationFrame(updateLook);
+		};
+
+		window.addEventListener('pointermove', scheduleLookUpdate, { passive: true });
+		window.addEventListener('pointerdown', scheduleLookUpdate, { passive: true });
+		window.addEventListener('resize', syncLastTarget);
+
+		return () => {
+			window.removeEventListener('pointermove', scheduleLookUpdate);
+			window.removeEventListener('pointerdown', scheduleLookUpdate);
+			window.removeEventListener('resize', syncLastTarget);
+			if (frame !== 0) window.cancelAnimationFrame(frame);
+		};
+	}, []);
+
+	return { leftEyeRef, logoRef, looks, rightEyeRef };
+}
+
+function DiscoLogo() {
+	const { leftEyeRef, logoRef, looks, rightEyeRef } = useLogoEyeTracking();
+	const leftEyeStyle = {
+		'--eye-x': `${looks.left.x * 0.15}em`,
+		'--eye-y': `${looks.left.y * 0.12}em`,
+	} as CSSProperties;
+	const rightEyeStyle = {
+		'--eye-x': `${looks.right.x * 0.15}em`,
+		'--eye-y': `${looks.right.y * 0.12}em`,
+	} as CSSProperties;
+
+	return (
+		<div aria-label='decideroo' className='disco-logo' ref={logoRef} role='img'>
+			<span aria-hidden='true' className='disco-logo-word'>
+				<span className='disco-logo-text'>
+					{'decider'.split('').map((letter, index) => (
+						<span className='disco-logo-letter' key={`${letter}-${index}`}>
+							{letter}
+						</span>
+					))}
+				</span>
+				<span className='disco-logo-eye' ref={leftEyeRef} style={leftEyeStyle}>
+					<span className='disco-logo-pupil' />
+				</span>
+				<span className='disco-logo-eye disco-logo-eye-right' ref={rightEyeRef} style={rightEyeStyle}>
+					<span className='disco-logo-pupil' />
+				</span>
+			</span>
+		</div>
+	);
+}
+
 function optionPoint(points: OptionPoints, optionName: string) {
 	return points[optionName] ?? 0;
 }
@@ -189,6 +302,47 @@ function ScreenPointChips({ points }: { points: OptionPoints }) {
 				</span>
 			))}
 		</div>
+	);
+}
+
+function ProgressBar({ progress }: { progress: number }) {
+	return (
+		<div
+			aria-label='Quiz progress'
+			aria-valuemax={100}
+			aria-valuemin={0}
+			aria-valuenow={progress}
+			className='h-3 min-w-0 flex-1 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white'
+			role='progressbar'
+		>
+			<div className='h-full bg-emerald-500 transition-all' style={{ width: `${progress}%` }} />
+		</div>
+	);
+}
+
+function LogoHeader() {
+	return (
+		<header className='relative z-30 flex shrink-0 justify-center'>
+			<DiscoLogo />
+		</header>
+	);
+}
+
+function StatusBar({
+	points,
+	progress,
+	soundButton,
+}: {
+	points: OptionPoints;
+	progress: number;
+	soundButton: ReactNode;
+}) {
+	return (
+		<footer className='relative z-30 grid w-full shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3'>
+			{soundButton}
+			<ProgressBar progress={progress} />
+			<ScoreStrip points={points} />
+		</footer>
 	);
 }
 
@@ -357,32 +511,26 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		return (
 			<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
 				<ClubBackground />
-				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col items-center justify-center gap-6 p-6 text-center text-white sm:h-[760px] sm:max-h-full sm:p-0'>
-					<div className='space-y-6'>
-						<h1 className='text-5xl font-black leading-none drop-shadow-[0_2px_18px_rgba(255,255,255,0.45)]'>
-							Decidaroo
-						</h1>
-						<div className='mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-neutral-950 bg-fuchsia-200 shadow-[5px_5px_0_#171717]'>
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col justify-center p-4 text-center text-white sm:h-[760px] sm:max-h-full sm:p-0'>
+					<div className='flex flex-col items-center justify-center gap-6'>
+						<DiscoLogo />
+						<div className='mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-neutral-950 bg-orange-300 shadow-[5px_5px_0_#171717]'>
 							<Headphones size={54} weight='duotone' />
 						</div>
 						<p className='text-2xl font-black leading-tight'>Are your headphones connected?</p>
-					</div>
 
-					<div className='grid w-full gap-3'>
-						<button
-							className='min-h-12 rounded-lg bg-neutral-950 px-4 py-3 text-base font-black text-white shadow-sm active:translate-y-px'
-							onClick={() => chooseSound('yes')}
-							type='button'
-						>
-							yes
-						</button>
-						<button
-							className='min-h-12 rounded-lg border-2 border-neutral-950 bg-white px-4 py-3 text-base font-black text-neutral-950 shadow-[3px_3px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#171717]'
-							onClick={() => chooseSound('no')}
-							type='button'
-						>
-							no I'm a boring person
-						</button>
+						<div className='grid w-full gap-3'>
+							<Button onClick={() => chooseSound('yes')} theme='endAction'>
+								yes
+							</Button>
+							<button
+								className='min-h-12 rounded-lg border-2 border-neutral-950 bg-white px-4 py-3 text-base font-black text-neutral-950 shadow-[3px_3px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#171717]'
+								onClick={() => chooseSound('no')}
+								type='button'
+							>
+								no I'm a boring person
+							</button>
+						</div>
 					</div>
 				</section>
 			</main>
@@ -393,17 +541,15 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
 			<ClubBackground />
 			{isDone ? (
-				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col p-4 sm:h-[760px] sm:max-h-full sm:p-0'>
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col gap-3 p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
+					<LogoHeader />
 					<section className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
-						<div className='flex items-start gap-3'>
-							<SoundButton />
-							<div className='flex-1 space-y-3'>
-								<p className='text-xs font-bold uppercase text-fuchsia-700'>final verdict</p>
-								<h2 className='text-2xl font-black leading-tight text-neutral-950'>
-									{winningOption(finalPoints).name} is what you truly desire
-								</h2>
-								<PointsBreakdown points={finalPoints} />
-							</div>
+						<div className='space-y-3'>
+							<p className='text-xs font-bold uppercase text-fuchsia-700'>final verdict</p>
+							<h2 className='text-2xl font-black leading-tight text-neutral-950'>
+								{winningOption(finalPoints).name} is what you truly desire
+							</h2>
+							<PointsBreakdown points={finalPoints} />
 						</div>
 
 						<div className='space-y-3'>
@@ -436,16 +582,11 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 							Run the nonsense again
 						</Button>
 					</section>
+					<StatusBar points={finalPoints} progress={progress} soundButton={<SoundButton />} />
 				</section>
 			) : currentQuiz && currentScreen ? (
 				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col gap-3 overflow-visible p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
-					<header className='flex shrink-0 items-center gap-3'>
-						<SoundButton />
-						<div className='h-3 flex-1 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white'>
-							<div className='h-full bg-emerald-500 transition-all' style={{ width: `${progress}%` }} />
-						</div>
-						<ScoreStrip points={activePoints} />
-					</header>
+					<LogoHeader />
 					<div className='min-h-0 flex-1 overflow-visible'>
 						<Suspense
 							fallback={
@@ -463,6 +604,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 							/>
 						</Suspense>
 					</div>
+					<StatusBar points={activePoints} progress={progress} soundButton={<SoundButton />} />
 				</section>
 			) : null}
 		</main>

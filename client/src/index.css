@@ -244,6 +244,234 @@ textarea {
 	}
 }
 
+.disco-logo {
+	--eye-x: 0em;
+	--eye-y: 0em;
+	display: inline-flex;
+	justify-content: center;
+	pointer-events: none;
+	filter: drop-shadow(0 0.06rem 0 #171717) drop-shadow(0 0 0.56rem rgb(34 211 238 / 0.24))
+		drop-shadow(0 0 0.86rem rgb(244 114 182 / 0.18));
+}
+
+.disco-logo-word {
+	position: relative;
+	isolation: isolate;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.015em;
+	font-size: 3rem;
+	font-weight: 900;
+	line-height: 1;
+	letter-spacing: 0;
+	text-transform: lowercase;
+}
+
+.disco-logo-word::before {
+	position: absolute;
+	inset: 2% -7% -2%;
+	z-index: -2;
+	border-radius: 999px;
+	content: '';
+	background:
+		radial-gradient(circle at 18% 40%, rgb(34 211 238 / 0.32), transparent 28%),
+		radial-gradient(circle at 72% 52%, rgb(244 114 182 / 0.28), transparent 30%),
+		linear-gradient(110deg, rgb(34 211 238 / 0.12), rgb(255 255 255 / 0.2), rgb(244 114 182 / 0.12));
+	filter: blur(0.6rem);
+	opacity: 0.58;
+	animation: disco-logo-holo-aura 5.2s ease-in-out infinite alternate;
+}
+
+.disco-logo-text {
+	position: relative;
+	display: inline-flex;
+	overflow: visible;
+	padding: 0.08em 0.01em 0.02em;
+	filter: drop-shadow(0.026em 0 #171717) drop-shadow(-0.022em 0 #171717) drop-shadow(0 0.026em #171717)
+		drop-shadow(0 -0.018em #171717);
+}
+
+.disco-logo-letter {
+	display: inline-block;
+	color: #f8fbff;
+	text-shadow:
+		-0.045em -0.014em 0 rgb(34 211 238 / 0.58),
+		0.043em 0.016em 0 rgb(244 114 182 / 0.48),
+		0 0 0.2em rgb(255 255 255 / 0.42),
+		0 0 0.34em rgb(34 211 238 / 0.24);
+	transform: translateY(0);
+	-webkit-text-fill-color: currentColor;
+	animation: disco-logo-letter-wave 8.6s ease-in-out infinite;
+}
+
+.disco-logo-letter:nth-child(2) {
+	color: #edfaff;
+	animation-delay: 90ms;
+}
+
+.disco-logo-letter:nth-child(3) {
+	color: #f8f2ff;
+	animation-delay: 180ms;
+}
+
+.disco-logo-letter:nth-child(4) {
+	color: #ffffff;
+	animation-delay: 270ms;
+}
+
+.disco-logo-letter:nth-child(5) {
+	color: #eefcff;
+	animation-delay: 360ms;
+}
+
+.disco-logo-letter:nth-child(6) {
+	color: #f8f2ff;
+	animation-delay: 450ms;
+}
+
+.disco-logo-letter:nth-child(7) {
+	color: #ffffff;
+	animation-delay: 540ms;
+}
+
+.disco-logo-eye {
+	position: relative;
+	top: 0.02em;
+	display: inline-block;
+	flex: none;
+	width: 0.78em;
+	height: 0.78em;
+	overflow: hidden;
+	border: 0.055em solid #171717;
+	border-radius: 999px;
+	background:
+		radial-gradient(circle at 34% 25%, rgb(255 255 255 / 0.98) 0 10%, transparent 11%),
+		radial-gradient(circle at 48% 52%, #fff 0 54%, #bae6fd 55% 66%, #f0abfc 67% 100%);
+	box-shadow:
+		inset 0 -0.05em 0 rgb(23 23 23 / 0.16),
+		inset 0 0.06em 0 rgb(255 255 255 / 0.95),
+		0.045em 0.055em 0 #171717,
+		0 0 0.18em rgb(34 211 238 / 0.45);
+	transform: translateY(0);
+	animation: disco-logo-letter-wave 8.6s ease-in-out infinite;
+	animation-delay: 630ms;
+}
+
+.disco-logo-eye-right {
+	animation-delay: 720ms;
+}
+
+.disco-logo-eye::before {
+	position: absolute;
+	inset: -8%;
+	z-index: 5;
+	content: '';
+	background: #171717;
+	transform: scaleY(0);
+	transform-origin: top;
+	animation: disco-eye-blink 6.5s infinite;
+}
+
+.disco-logo-eye-right::before {
+	animation-delay: 140ms;
+}
+
+.disco-logo-eye::after {
+	position: absolute;
+	top: 18%;
+	left: 24%;
+	z-index: 4;
+	width: 0.12em;
+	height: 0.12em;
+	border-radius: 999px;
+	content: '';
+	background: white;
+	box-shadow:
+		0.2em -0.04em 0 -0.035em rgb(255 255 255 / 0.9),
+		0 0 0.12em rgb(255 255 255 / 0.8);
+}
+
+.disco-logo-pupil {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	z-index: 2;
+	width: 0.34em;
+	height: 0.34em;
+	border-radius: 999px;
+	background: radial-gradient(circle at 36% 32%, #fff 0 8%, #172554 9% 34%, #171717 35% 100%);
+	box-shadow:
+		inset 0.035em 0.035em 0 rgb(255 255 255 / 0.18),
+		0 0 0.12em rgb(34 211 238 / 0.65);
+	transform: translate(calc(-50% + var(--eye-x)), calc(-50% + var(--eye-y)));
+	transition: transform 120ms ease-out;
+}
+
+@keyframes disco-logo-holo-aura {
+	from {
+		opacity: 0.46;
+		filter: blur(0.56rem) hue-rotate(0deg);
+	}
+	to {
+		opacity: 0.66;
+		filter: blur(0.72rem) hue-rotate(34deg);
+	}
+}
+
+@keyframes disco-logo-letter-wave {
+	0%,
+	72%,
+	100% {
+		transform: translateY(0);
+	}
+	76% {
+		transform: translateY(-0.075em);
+	}
+	80% {
+		transform: translateY(0);
+	}
+}
+
+@keyframes disco-eye-blink {
+	0%,
+	88%,
+	92%,
+	100% {
+		transform: scaleY(0);
+	}
+	90% {
+		transform: scaleY(1);
+	}
+}
+
+@media (min-width: 640px) {
+	.disco-logo-word {
+		font-size: 4rem;
+	}
+}
+
+@media (max-width: 360px) {
+	.disco-logo-word {
+		font-size: 2.62rem;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.disco-logo,
+	.disco-logo-word,
+	.disco-logo-word::before,
+	.disco-logo-text,
+	.disco-logo-letter,
+	.disco-logo-eye::before {
+		animation: none;
+	}
+
+	.disco-logo-pupil {
+		transition: none;
+	}
+}
+
 @keyframes swipe-card-jiggle {
 	0%,
 	100% {
