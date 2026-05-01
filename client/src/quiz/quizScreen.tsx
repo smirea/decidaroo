@@ -2,12 +2,18 @@ import type { ComponentType, LazyExoticComponent } from 'react';
 import { decidingOptions } from '../../../shared/constants.ts';
 
 export type OptionPoints = Record<string, number>;
-export type SubmitScore = (score: Partial<OptionPoints>) => void;
+export type ScoreDetail = {
+	title: string;
+	content?: string;
+	points: Partial<OptionPoints>;
+};
+export type SubmitScore = (score: Partial<OptionPoints>, details?: readonly ScoreDetail[]) => void;
 
 export type QuizScreenProps<TConfig> = {
 	screenNumber: number;
 	screenCount: number;
 	config: TConfig;
+	previewScore: (score: Partial<OptionPoints>) => void;
 	submit: SubmitScore;
 };
 

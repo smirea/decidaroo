@@ -1,8 +1,15 @@
 import { Headphones, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
-import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
-import { scoreInputToPoints, sumOptionPoints, type OptionPoints, type QuizDefinition } from './quizScreen.tsx';
+import { QuestionScoreList } from './questionScoreList.tsx';
+import {
+	scoreInputToPoints,
+	sumOptionPoints,
+	type OptionPoints,
+	type QuizDefinition,
+	type ScoreDetail,
+} from './quizScreen.tsx';
 import { asteroidsQuiz } from './asteroids.tsx';
 import { cockpitQuiz } from './cockpit.tsx';
 import { diceRollQuiz } from './diceRoll.tsx';
@@ -17,6 +24,7 @@ const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
 
 type ScreenResult = {
 	title: string;
+	content?: string;
 	points: OptionPoints;
 };
 
@@ -25,6 +33,7 @@ type QuizResult = {
 	title: string;
 	points: OptionPoints;
 	screens: ScreenResult[];
+	completedScreenCount: number;
 };
 
 type SoundChoice = 'yes' | 'no';
@@ -357,6 +366,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
 	const [screenScores, setScreenScores] = useState<OptionPoints[]>([]);
+	const [liveScreenScore, setLiveScreenScore] = useState<OptionPoints>(() => scoreInputToPoints({}));
 	const [results, setResults] = useState<QuizResult[]>([]);
 	const [soundState, setSoundState] = useState(() => {
 		if (!skipIntro) return getInitialSoundState();
@@ -372,9 +382,10 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const currentQuiz = quizSet[quizIndex];
 	const currentScreen = currentQuiz?.screens[screenIndex];
 	const totalScreens = quizSet.reduce((total, quiz) => total + quiz.screens.length, 0);
-	const completedScreens = results.reduce((total, result) => total + result.screens.length, 0) + screenIndex;
+	const completedScreens = results.reduce((total, result) => total + result.completedScreenCount, 0) + screenIndex;
 	const progress = isDone || totalScreens === 0 ? 100 : Math.round((completedScreens / totalScreens) * 100);
-	const activePoints = sumOptionPoints([...results.map(result => result.points), ...screenScores]);
+	const activePoints = sumOptionPoints([...results.map(result => result.points), ...screenScores, liveScreenScore]);
+	const previewScore = useCallback((score: Partial<OptionPoints>) => setLiveScreenScore(scoreInputToPoints(score)), []);
 
 	useEffect(() => {
 		const audio = document.createElement('audio');
@@ -409,16 +420,23 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		setQuizIndex(0);
 		setScreenIndex(0);
 		setScreenScores([]);
+		setLiveScreenScore(scoreInputToPoints({}));
 		setResults([]);
 	}
 
-	function submit(rawScore: Partial<OptionPoints>) {
+	function submit(rawScore: Partial<OptionPoints>, details?: readonly ScoreDetail[]) {
 		if (!currentQuiz) return;
 
 		const nextScores = [...screenScores, scoreInputToPoints(rawScore)];
+		const detailScreens = details?.map(detail => ({
+			title: detail.title,
+			content: detail.content,
+			points: scoreInputToPoints(detail.points),
+		}));
 
 		if (screenIndex < currentQuiz.screens.length - 1) {
 			setScreenScores(nextScores);
+			setLiveScreenScore(scoreInputToPoints({}));
 			setScreenIndex(current => current + 1);
 			return;
 		}
@@ -427,14 +445,18 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 			id: currentQuiz.id,
 			title: currentQuiz.title,
 			points: currentQuiz.score(nextScores),
-			screens: nextScores.map((points, index) => ({
-				title: screenTitle(currentQuiz.screens[index], index),
-				points,
-			})),
+			screens:
+				detailScreens ??
+				nextScores.map((points, index) => ({
+					title: screenTitle(currentQuiz.screens[index], index),
+					points,
+				})),
+			completedScreenCount: currentQuiz.screens.length,
 		};
 
 		setResults(current => [...current, nextResult]);
 		setScreenScores([]);
+		setLiveScreenScore(scoreInputToPoints({}));
 		setScreenIndex(0);
 		setQuizIndex(current => current + 1);
 	}
@@ -560,19 +582,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 										{result.screens.length === 1 ? <ScreenPointChips points={result.points} /> : null}
 									</div>
 									{result.screens.length > 1 ? (
-										<div className='mt-3 space-y-2'>
-											{result.screens.map((screen, index) => (
-												<div
-													className='grid grid-cols-[1fr_auto] items-center gap-3 text-sm'
-													key={`${result.id}-${screen.title}`}
-												>
-													<span className='font-semibold text-neutral-700'>
-														{index + 1}. {screen.title}
-													</span>
-													<ScreenPointChips points={screen.points} />
-												</div>
-											))}
-										</div>
+										<QuestionScoreList className='mt-3 space-y-2' items={result.screens} />
 									) : null}
 								</div>
 							))}
@@ -598,6 +608,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 							<currentQuiz.Screen
 								config={currentScreen}
 								key={`${currentQuiz.id}-${screenIndex}`}
+								previewScore={previewScore}
 								screenCount={currentQuiz.screens.length}
 								screenNumber={screenIndex + 1}
 								submit={submit}
