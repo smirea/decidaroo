@@ -1,5 +1,14 @@
-import { Headphones, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
-import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Headphones, SpeakerHigh, SpeakerSlash, UserCircle } from '@phosphor-icons/react';
+import {
+	Suspense,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+	type CSSProperties,
+	type FormEvent,
+	type ReactNode,
+} from 'react';
 import { Button } from '../components/Button.tsx';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { QuestionScoreList } from './questionScoreList.tsx';
@@ -22,6 +31,7 @@ const themeSongUrl = '/decidaroo.mp3';
 const versusSoundUrl = '/sfx/vs-intro.wav';
 const soundChoiceKey = 'decideroo:sound-choice';
 const soundToggleKey = 'decideroo:sound-on';
+const playerNameKey = 'decideroo:player-name';
 const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
 
 type ScreenResult = {
@@ -128,6 +138,18 @@ function readStoredSoundOn() {
 
 function writeStoredSoundOn(on: boolean) {
 	window.localStorage.setItem(soundToggleKey, JSON.stringify({ on, at: Date.now() }));
+}
+
+function readStoredPlayerName() {
+	try {
+		return window.localStorage.getItem(playerNameKey)?.trim() ?? '';
+	} catch {
+		return '';
+	}
+}
+
+function writeStoredPlayerName(name: string) {
+	window.localStorage.setItem(playerNameKey, name);
 }
 
 function getInitialSoundState() {
@@ -370,6 +392,8 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const [screenScores, setScreenScores] = useState<OptionPoints[]>([]);
 	const [liveScreenScore, setLiveScreenScore] = useState<OptionPoints>(() => scoreInputToPoints({}));
 	const [results, setResults] = useState<QuizResult[]>([]);
+	const [playerName, setPlayerName] = useState(readStoredPlayerName);
+	const [showPlayerName, setShowPlayerName] = useState(!skipIntro);
 	const [soundState, setSoundState] = useState(() => {
 		if (!skipIntro) return getInitialSoundState();
 
@@ -437,6 +461,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		setScreenScores([]);
 		setLiveScreenScore(scoreInputToPoints({}));
 		setResults([]);
+		setShowPlayerName(!skipIntro);
 		setShowVersusIntro(!skipIntro);
 	}
 
@@ -521,7 +546,6 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 	function chooseSound(choice: SoundChoice) {
 		const stored = writeStoredSoundChoice(choice);
-		void playVersusIntroSound();
 		setSoundState({ stored, showIntro: false });
 
 		const nextSoundOn = choice === 'yes';
@@ -533,6 +557,18 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		}
 
 		saveThemeSongIntent(true);
+	}
+
+	function submitPlayerName(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+
+		const nextName = playerName.trim();
+		if (!nextName) return;
+
+		writeStoredPlayerName(nextName);
+		setPlayerName(nextName);
+		setShowPlayerName(false);
+		if (hasFreshHeadphoneYes(soundState.stored)) void playVersusIntroSound();
 	}
 
 	function finishVersusIntro() {
@@ -558,13 +594,21 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	}
 
 	useEffect(() => {
-		if (soundState.showIntro || !showVersusIntro || versusSoundAttemptedRef.current) return;
+		if (
+			soundState.showIntro ||
+			showPlayerName ||
+			!showVersusIntro ||
+			versusSoundAttemptedRef.current ||
+			!hasFreshHeadphoneYes(soundState.stored)
+		) {
+			return;
+		}
 
 		void playVersusIntroSound().then(played => {
 			if (played) return;
 			setSoundState(current => (current.showIntro ? current : { ...current, showIntro: true }));
 		});
-	}, [showVersusIntro, soundState.showIntro]);
+	}, [showPlayerName, showVersusIntro, soundState.showIntro, soundState.stored]);
 
 	function SoundButton() {
 		return (
@@ -603,6 +647,58 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 								no I'm a boring person
 							</button>
 						</div>
+					</div>
+				</section>
+			</main>
+		);
+	}
+
+	if (showPlayerName) {
+		const hasPlayerName = playerName.trim().length > 0;
+
+		return (
+			<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
+				<ClubBackground />
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col justify-center p-4 text-center text-white sm:h-[760px] sm:max-h-full sm:p-0'>
+					<div className='flex flex-col items-center justify-center gap-6'>
+						<DiscoLogo />
+						<div className='mx-auto flex h-24 w-24 items-center justify-center rounded-full border-2 border-neutral-950 bg-cyan-200 shadow-[5px_5px_0_#171717]'>
+							<UserCircle size={54} weight='duotone' />
+						</div>
+						<p className='text-2xl font-black leading-tight'>What's your player name?</p>
+
+						<form
+							autoComplete='off'
+							className='grid w-full gap-4'
+							data-1p-ignore='true'
+							data-bwignore='true'
+							data-form-type='other'
+							data-lpignore='true'
+							data-op-ignore='true'
+							onSubmit={submitPlayerName}
+						>
+							<label className='grid gap-2 text-left'>
+								<span className='text-xs font-black uppercase text-cyan-200'>player name</span>
+								<input
+									autoComplete='off'
+									autoFocus
+									className='h-14 rounded-lg border-2 border-neutral-950 bg-white px-4 text-xl font-black text-neutral-950 shadow-[4px_4px_0_#171717] outline-none placeholder:text-neutral-400 focus:ring-4 focus:ring-cyan-300/70'
+									data-1p-ignore='true'
+									data-bwignore='true'
+									data-form-type='other'
+									data-lpignore='true'
+									data-op-ignore='true'
+									maxLength={32}
+									onChange={event => setPlayerName(event.target.value)}
+									placeholder='Your name'
+									value={playerName}
+								/>
+							</label>
+
+							<Button disabled={!hasPlayerName} theme='endAction' type='submit'>
+								next
+							</Button>
+						</form>
 					</div>
 				</section>
 			</main>
