@@ -790,8 +790,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 		return { stored: readStoredSoundChoice(), showIntro: false };
 	});
-	const [, setSoundOn] = useState(readStoredSoundOn);
-	const [themeSongPlaying, setThemeSongPlaying] = useState(false);
+	const [soundOn, setSoundOn] = useState(readStoredSoundOn);
 	const [showVersusIntro, setShowVersusIntro] = useState(!skipIntro && !hasInitialPlayerName);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 	const versusAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -965,28 +964,33 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		versusAudio.setAttribute('aria-hidden', 'true');
 		audioRef.current = audio;
 		versusAudioRef.current = versusAudio;
-		const syncAudioState = () => setThemeSongPlaying(!audio.paused);
-
-		audio.addEventListener('play', syncAudioState);
-		audio.addEventListener('pause', syncAudioState);
-		audio.addEventListener('ended', syncAudioState);
 		document.body.append(audio, versusAudio);
 		audio.load();
 		versusAudio.load();
 
 		return () => {
-			audio.removeEventListener('play', syncAudioState);
-			audio.removeEventListener('pause', syncAudioState);
-			audio.removeEventListener('ended', syncAudioState);
 			audio.pause();
 			versusAudio.pause();
 			audio.remove();
 			versusAudio.remove();
 			audioRef.current = null;
 			versusAudioRef.current = null;
-			setThemeSongPlaying(false);
 		};
 	}, []);
+
+	useEffect(() => {
+		const audio = audioRef.current;
+		if (!audio) return;
+
+		if (!soundOn) {
+			audio.pause();
+			return;
+		}
+
+		if (soundState.showIntro || showPlayerName || showVersusIntro || !audio.paused) return;
+
+		void audio.play().catch(() => {});
+	}, [showPlayerName, showVersusIntro, soundOn, soundState.showIntro]);
 
 	function submit(rawScore: Partial<OptionPoints>, details?: readonly ScoreDetail[]) {
 		if (!currentQuiz) return;
@@ -1048,10 +1052,8 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 		try {
 			await audio.play();
-			setThemeSongPlaying(true);
 			return true;
 		} catch {
-			setThemeSongPlaying(false);
 			return false;
 		}
 	}
@@ -1061,7 +1063,6 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		if (!audio) return;
 
 		audio.pause();
-		setThemeSongPlaying(false);
 	}
 
 	function saveThemeSongIntent(on: boolean) {
@@ -1125,7 +1126,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	}
 
 	function toggleThemeSong() {
-		if (themeSongPlaying) {
+		if (soundOn) {
 			saveThemeSongIntent(false);
 			pauseThemeSong();
 			return;
@@ -1133,8 +1134,8 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 		const stored = writeStoredSoundChoice('yes');
 		setSoundState({ stored, showIntro: false });
-
-		void playThemeSong().then(saveThemeSongIntent);
+		saveThemeSongIntent(true);
+		void playThemeSong();
 	}
 
 	useEffect(() => {
@@ -1157,12 +1158,13 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	function SoundButton() {
 		return (
 			<button
-				aria-label={themeSongPlaying ? 'Turn theme song off' : 'Turn theme song on'}
+				aria-label={soundOn ? 'Turn theme song off' : 'Turn theme song on'}
+				aria-pressed={soundOn}
 				className='flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-neutral-950 bg-white text-neutral-950 shadow-[3px_3px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#171717]'
 				onClick={toggleThemeSong}
 				type='button'
 			>
-				{themeSongPlaying ? <SpeakerHigh size={21} weight='fill' /> : <SpeakerSlash size={21} weight='fill' />}
+				{soundOn ? <SpeakerHigh size={21} weight='fill' /> : <SpeakerSlash size={21} weight='fill' />}
 			</button>
 		);
 	}
