@@ -1,3 +1,5 @@
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { env } from 'node:process';
 import { decidingOptions } from '../../shared/constants.ts';
 import type {
@@ -16,15 +18,89 @@ if (Number.isNaN(apiPort)) throw new Error('API_PORT must be a valid number');
 
 const encoder = new TextEncoder();
 const gameClients = new Set<ReadableStreamDefaultController<Uint8Array>>();
+const rootDirectory = join(import.meta.dir, '..', '..');
+const gamesDirectory = env.GAMES_DIR ?? join(rootDirectory, '.games');
 
-const gameState: GameState = {
-	startedAt: new Date().toISOString(),
-	updatedAt: new Date().toISOString(),
-	players: [],
-};
+let gameState = await loadInitialGame();
+let activeGameDay = gameDayFromIso(gameState.startedAt) ?? gameDay();
+
+await saveGame();
 
 function emptyScore(): OptionPoints {
 	return Object.fromEntries(decidingOptions.map(option => [option.name, 0]));
+}
+
+function gameDay(date = new Date()) {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+
+	return `${year}-${month}-${day}`;
+}
+
+function gameDayFromIso(value: string) {
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return null;
+
+	return gameDay(date);
+}
+
+function newGameState(now = new Date()): GameState {
+	const timestamp = now.toISOString();
+
+	return {
+		startedAt: timestamp,
+		updatedAt: timestamp,
+		players: [],
+	};
+}
+
+function gameFilePath(game = gameState) {
+	return join(gamesDirectory, `${gameDayFromIso(game.startedAt) ?? gameDay()}.json`);
+}
+
+async function readGame(filePath: string) {
+	try {
+		return JSON.parse(await readFile(filePath, 'utf8')) as GameState;
+	} catch {
+		return null;
+	}
+}
+
+async function loadInitialGame() {
+	await mkdir(gamesDirectory, { recursive: true });
+
+	const today = gameDay();
+	const gameFiles = (await readdir(gamesDirectory))
+		.filter(file => file.endsWith('.json'))
+		.sort()
+		.reverse();
+
+	for (const gameFile of gameFiles) {
+		const game = await readGame(join(gamesDirectory, gameFile));
+		if (!game) continue;
+		if (gameDayFromIso(game.startedAt) === today) return game;
+
+		break;
+	}
+
+	return newGameState();
+}
+
+async function saveGame() {
+	await mkdir(gamesDirectory, { recursive: true });
+	await writeFile(gameFilePath(), `${JSON.stringify(gameState, null, 2)}\n`);
+}
+
+async function ensureTodayGame() {
+	const today = gameDay();
+	if (activeGameDay === today) return false;
+
+	gameState = newGameState();
+	activeGameDay = today;
+	await saveGame();
+
+	return true;
 }
 
 function emptyProgress(): PlayerProgress {
@@ -126,11 +202,21 @@ function reduceGame(action: GameAction) {
 	return player;
 }
 
+setInterval(() => {
+	void ensureTodayGame()
+		.then(changed => {
+			if (changed) broadcastGame();
+		})
+		.catch(error => console.error('Failed to start daily game', error));
+}, 60_000);
+
 const server = Bun.serve({
 	development: true,
 	port: apiPort,
 	async fetch(request) {
 		const url = new URL(request.url);
+		const gameChanged = await ensureTodayGame();
+		if (gameChanged) broadcastGame();
 
 		if (url.pathname === '/status') return Response.json({ ok: true });
 		if (url.pathname !== '/game') return Response.json({ ok: false, error: 'Not found' }, { status: 404 });
@@ -147,6 +233,7 @@ const server = Bun.serve({
 			const action = (await request.json()) as GameAction;
 			const player = reduceGame(action);
 
+			if (player) await saveGame();
 			broadcastGame();
 			return Response.json(gameResponse(player?.name ?? action.name));
 		}
