@@ -111,6 +111,11 @@ async function ensureTodayGame() {
 	return true;
 }
 
+function restartGame() {
+	gameState = newGameState();
+	activeGameDay = gameDayFromIso(gameState.startedAt) ?? gameDay();
+}
+
 function emptyProgress(): PlayerProgress {
 	return {
 		quizIndex: 0,
@@ -191,6 +196,11 @@ function streamGame() {
 }
 
 function reduceGame(action: GameAction) {
+	if (action.type === 'restart') {
+		restartGame();
+		return null;
+	}
+
 	const name = action.name.trim();
 	if (!name) return null;
 
@@ -250,9 +260,9 @@ const server = Bun.serve({
 			const action = (await request.json()) as GameAction;
 			const player = reduceGame(action);
 
-			if (player) await saveGame();
+			if (player || action.type === 'restart') await saveGame();
 			broadcastGame();
-			return Response.json(gameResponse(player?.name ?? action.name));
+			return Response.json(gameResponse(action.type === 'restart' ? null : (player?.name ?? action.name)));
 		}
 
 		return Response.json({ ok: false, error: 'Method not allowed' }, { status: 405 });

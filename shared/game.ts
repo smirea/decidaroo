@@ -44,4 +44,5 @@ export type GameAction =
 	| { type: 'join'; name: string }
 	| { type: 'kick'; name: string; targetName: string }
 	| { type: 'ready'; name: string }
+	| { type: 'restart' }
 	| { type: 'save'; name: string; progress: PlayerProgress; score: OptionPoints };

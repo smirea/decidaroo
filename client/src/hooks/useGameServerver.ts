@@ -80,5 +80,23 @@ export function useGameServer(enabled = true) {
 		[enabled],
 	);
 
-	return { game, reloadGame, reloadPlayer, sendAction };
+	const restartGame = useCallback(async (): Promise<GameState | null> => {
+		if (!enabled) return null;
+
+		try {
+			const response = await fetch(gameUrl, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ type: 'restart' } satisfies GameAction),
+			});
+			const payload = (await response.json()) as GameResponse;
+
+			setGame(payload.game);
+			return payload.game;
+		} catch {
+			return null;
+		}
+	}, [enabled]);
+
+	return { game, reloadGame, reloadPlayer, restartGame, sendAction };
 }

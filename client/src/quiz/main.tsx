@@ -37,6 +37,15 @@ const versusSoundUrl = '/sfx/vs-intro.wav';
 const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
 const emptyKickVotes: GameState['kickVotes'] = {};
 
+declare global {
+	interface Window {
+		DEBUG?: {
+			restartGame?: () => Promise<GameState | null>;
+			[key: string]: unknown;
+		};
+	}
+}
+
 type SoundChoice = 'yes' | 'no';
 
 type StoredSoundChoice = {
@@ -765,8 +774,9 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	if (initialPlayerNameRef.current === null) initialPlayerNameRef.current = readStoredPlayerName();
 	const initialPlayerName = initialPlayerNameRef.current;
 	const hasInitialPlayerName = initialPlayerName.length > 0;
-	const { game, reloadGame, reloadPlayer, sendAction } = useGameServer(!skipIntro);
+	const { game, reloadGame, reloadPlayer, restartGame, sendAction } = useGameServer(!skipIntro);
 	const loadedPlayerRef = useRef<string | null>(null);
+	const gameStartedAtRef = useRef<string | null>(null);
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
 	const [screenScores, setScreenScores] = useState<OptionPoints[]>([]);
@@ -830,6 +840,19 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		},
 		[quizSet],
 	);
+	const resetLocalGame = useCallback(() => {
+		const syncedName = playerName.trim();
+
+		loadedPlayerRef.current = null;
+		setQuizIndex(0);
+		setScreenIndex(0);
+		setScreenScores([]);
+		setLiveScreenScore(scoreInputToPoints({}));
+		setResults([]);
+		setShowGroupResults(false);
+		setShowPlayerName(!skipIntro && !syncedName);
+		setShowVersusIntro(!skipIntro && !syncedName);
+	}, [playerName, skipIntro]);
 	const savePlayerProgress = useCallback(
 		(progress: PlayerProgress, name = playerName) => {
 			const syncedName = name.trim();
@@ -861,6 +884,49 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 		void sendAction({ type: 'ready', name: syncedName });
 	}, [playerName, sendAction, skipIntro]);
+	useEffect(() => {
+		if (skipIntro) return;
+
+		const previousRestartGame = window.DEBUG?.restartGame;
+		const debugRestartGame = async () => {
+			const nextGame = await restartGame();
+			if (!nextGame) return null;
+
+			resetLocalGame();
+
+			const syncedName = playerName.trim();
+			if (syncedName) void sendAction({ type: 'join', name: syncedName });
+
+			return nextGame;
+		};
+
+		window.DEBUG = { ...window.DEBUG, restartGame: debugRestartGame };
+		return () => {
+			if (window.DEBUG?.restartGame !== debugRestartGame) return;
+			if (previousRestartGame) {
+				window.DEBUG = { ...window.DEBUG, restartGame: previousRestartGame };
+				return;
+			}
+
+			const debug = window.DEBUG;
+			if (!debug) return;
+
+			delete debug.restartGame;
+			if (Object.keys(debug).length === 0) delete window.DEBUG;
+		};
+	}, [playerName, resetLocalGame, restartGame, sendAction, skipIntro]);
+	useEffect(() => {
+		if (!game?.startedAt) return;
+
+		const previousStartedAt = gameStartedAtRef.current;
+		gameStartedAtRef.current = game.startedAt;
+		if (!previousStartedAt || previousStartedAt === game.startedAt) return;
+
+		resetLocalGame();
+
+		const syncedName = playerName.trim();
+		if (!skipIntro && syncedName) void sendAction({ type: 'join', name: syncedName });
+	}, [game?.startedAt, playerName, resetLocalGame, sendAction, skipIntro]);
 	useEffect(() => {
 		const syncedName = playerName.trim();
 		if (skipIntro || showPlayerName || !syncedName || loadedPlayerRef.current === syncedName) return;
