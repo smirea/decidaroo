@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/oxfmt/configuration_schema.json",
-	"ignorePatterns": [],
+	"ignorePatterns": ["**/*.gen.ts"],
 	"printWidth": 120,
 	"useTabs": true,
 	"semi": true,

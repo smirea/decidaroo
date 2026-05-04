@@ -68,11 +68,11 @@ type ShipParts = {
 const gameMs = 60_000;
 const baseFireInterval = 850;
 const coastingSpeed = 0.32;
-const shipAcceleration = 7.4;
-const shipInitialAcceleration = 12.2;
+const shipAcceleration = 9.25;
+const shipInitialAcceleration = 15.25;
 const shipInitialAccelerationMaxSpeed = 1.35;
 const shipBrake = 5.6;
-const shipMaxSpeed = 3;
+const shipMaxSpeed = 3.75;
 const shipRadius = 0.14;
 const shipArrivalRadius = 0.12;
 const shipSteering = 13;
@@ -268,7 +268,7 @@ function makeAsteroid(size: AsteroidSize, option: DecidingOption, position: THRE
 }
 
 function pointsForAsteroid(asteroid: Asteroid) {
-	return asteroid.size === 'big' ? 2 : 1;
+	return asteroid.size === 'big' ? 5 : 2;
 }
 
 function readPointerWorldPoint(event: React.PointerEvent<HTMLDivElement>, camera: THREE.OrthographicCamera) {
