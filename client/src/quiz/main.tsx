@@ -797,9 +797,11 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		return { stored: readStoredSoundChoice(), showIntro: false };
 	});
 	const [soundOn, setSoundOn] = useState(readStoredSoundOn);
+	const [themeSongPlaying, setThemeSongPlaying] = useState(false);
 	const [showVersusIntro, setShowVersusIntro] = useState(!skipIntro && !hasInitialPlayerName);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 	const versusAudioRef = useRef<HTMLAudioElement | null>(null);
+	const themeSongPlayPendingRef = useRef(false);
 	const versusSoundAttemptedRef = useRef(false);
 
 	const finalPoints = sumOptionPoints(results.map(result => result.points));
@@ -968,6 +970,11 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		versusAudio.preload = 'auto';
 		versusAudio.hidden = true;
 		versusAudio.setAttribute('aria-hidden', 'true');
+		const markThemeSongPlaying = () => setThemeSongPlaying(true);
+		const markThemeSongStopped = () => setThemeSongPlaying(false);
+		audio.addEventListener('playing', markThemeSongPlaying);
+		audio.addEventListener('pause', markThemeSongStopped);
+		audio.addEventListener('ended', markThemeSongStopped);
 		audioRef.current = audio;
 		versusAudioRef.current = versusAudio;
 		document.body.append(audio, versusAudio);
@@ -975,6 +982,9 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		versusAudio.load();
 
 		return () => {
+			audio.removeEventListener('playing', markThemeSongPlaying);
+			audio.removeEventListener('pause', markThemeSongStopped);
+			audio.removeEventListener('ended', markThemeSongStopped);
 			audio.pause();
 			versusAudio.pause();
 			audio.remove();
@@ -993,10 +1003,25 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 			return;
 		}
 
-		if (soundState.showIntro || showPlayerName || showVersusIntro || !audio.paused) return;
+		if (soundState.showIntro || showPlayerName || showVersusIntro || themeSongPlaying || !audio.paused) return;
 
-		void audio.play().catch(() => {});
-	}, [showPlayerName, showVersusIntro, soundOn, soundState.showIntro]);
+		const retryThemeSong = () => {
+			if (!audio.paused) return;
+			void playThemeSong();
+		};
+		const retryInterval = window.setInterval(retryThemeSong, 1500);
+		const retryOptions = { capture: true } as const;
+
+		retryThemeSong();
+		window.addEventListener('pointerdown', retryThemeSong, retryOptions);
+		window.addEventListener('keydown', retryThemeSong, retryOptions);
+
+		return () => {
+			window.clearInterval(retryInterval);
+			window.removeEventListener('pointerdown', retryThemeSong, retryOptions);
+			window.removeEventListener('keydown', retryThemeSong, retryOptions);
+		};
+	}, [showPlayerName, showVersusIntro, soundOn, soundState.showIntro, themeSongPlaying]);
 
 	function submit(rawScore: Partial<OptionPoints>, details?: readonly ScoreDetail[]) {
 		if (!currentQuiz) return;
@@ -1054,13 +1079,18 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 
 	async function playThemeSong() {
 		const audio = audioRef.current;
-		if (!audio) return false;
+		if (!audio || themeSongPlayPendingRef.current) return false;
 
 		try {
+			themeSongPlayPendingRef.current = true;
 			await audio.play();
+			setThemeSongPlaying(true);
 			return true;
 		} catch {
+			setThemeSongPlaying(false);
 			return false;
+		} finally {
+			themeSongPlayPendingRef.current = false;
 		}
 	}
 
@@ -1069,6 +1099,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		if (!audio) return;
 
 		audio.pause();
+		setThemeSongPlaying(false);
 	}
 
 	function saveThemeSongIntent(on: boolean) {
@@ -1132,7 +1163,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	}
 
 	function toggleThemeSong() {
-		if (soundOn) {
+		if (themeSongPlaying) {
 			saveThemeSongIntent(false);
 			pauseThemeSong();
 			return;
@@ -1164,13 +1195,13 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	function SoundButton() {
 		return (
 			<button
-				aria-label={soundOn ? 'Turn theme song off' : 'Turn theme song on'}
-				aria-pressed={soundOn}
+				aria-label={themeSongPlaying ? 'Turn theme song off' : 'Turn theme song on'}
+				aria-pressed={themeSongPlaying}
 				className='flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-neutral-950 bg-white text-neutral-950 shadow-[3px_3px_0_#171717] active:translate-x-px active:translate-y-px active:shadow-[1px_1px_0_#171717]'
 				onClick={toggleThemeSong}
 				type='button'
 			>
-				{soundOn ? <SpeakerHigh size={21} weight='fill' /> : <SpeakerSlash size={21} weight='fill' />}
+				{themeSongPlaying ? <SpeakerHigh size={21} weight='fill' /> : <SpeakerSlash size={21} weight='fill' />}
 			</button>
 		);
 	}
