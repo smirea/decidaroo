@@ -63,7 +63,7 @@ type GroupScoreRow = {
 	quizId: string;
 	quizTitle: string;
 	label: string;
-	isScreenRow: boolean;
+	kind: 'screen' | 'single' | 'summary';
 	pointsByPlayer: Record<string, OptionPoints>;
 };
 
@@ -331,7 +331,7 @@ function groupScoreRows(players: readonly GamePlayer[], quizSet: readonly QuizDe
 					quizId: quiz.id,
 					quizTitle: quiz.title,
 					label: quiz.title,
-					isScreenRow: false,
+					kind: 'single',
 					pointsByPlayer: Object.fromEntries(
 						players.map(player => [player.name, playerQuizResult(player, quiz)?.points ?? emptyOptionPoints()]),
 					),
@@ -339,22 +339,32 @@ function groupScoreRows(players: readonly GamePlayer[], quizSet: readonly QuizDe
 			];
 		}
 
-		return Array.from({ length: screenCount }, (_, screenIndex) => ({
-			id: `${quiz.id}-${screenIndex}`,
-			quizId: quiz.id,
-			quizTitle: quiz.title,
-			label:
-				players
-					.map(player => playerQuizResult(player, quiz)?.screens[screenIndex]?.title)
-					.find(title => typeof title === 'string') ?? screenTitle(quiz.screens[screenIndex], screenIndex),
-			isScreenRow: true,
-			pointsByPlayer: Object.fromEntries(
-				players.map(player => [
-					player.name,
-					playerQuizResult(player, quiz)?.screens[screenIndex]?.points ?? emptyOptionPoints(),
-				]),
-			),
-		}));
+		return [
+			{
+				id: `${quiz.id}-summary`,
+				quizId: quiz.id,
+				quizTitle: quiz.title,
+				label: quiz.title,
+				kind: 'summary',
+				pointsByPlayer: {},
+			},
+			...Array.from({ length: screenCount }, (_, screenIndex) => ({
+				id: `${quiz.id}-${screenIndex}`,
+				quizId: quiz.id,
+				quizTitle: quiz.title,
+				label:
+					players
+						.map(player => playerQuizResult(player, quiz)?.screens[screenIndex]?.title)
+						.find(title => typeof title === 'string') ?? screenTitle(quiz.screens[screenIndex], screenIndex),
+				kind: 'screen' as const,
+				pointsByPlayer: Object.fromEntries(
+					players.map(player => [
+						player.name,
+						playerQuizResult(player, quiz)?.screens[screenIndex]?.points ?? emptyOptionPoints(),
+					]),
+				),
+			})),
+		];
 	});
 }
 
@@ -362,6 +372,8 @@ function groupTallies(rows: readonly GroupScoreRow[], players: readonly GamePlay
 	const total = emptyOptionPoints();
 
 	for (const row of rows) {
+		if (row.kind === 'summary') continue;
+
 		for (const player of players) {
 			const points = row.pointsByPlayer[player.name] ?? emptyOptionPoints();
 			for (const option of decidingOptions) total[option.name] += points[option.name] ?? 0;
@@ -471,13 +483,15 @@ function StatusBar({
 	);
 }
 
-function TableScoreChips({ points }: { points: OptionPoints }) {
+function TableScoreChips({ points }: { points: OptionPoints | null }) {
+	if (!points) return <span className='text-sm font-black text-neutral-400'>?</span>;
+
 	const options = nonZeroOptions(points);
 
 	if (options.length === 0) return <span className='text-xs font-black text-neutral-400'>0</span>;
 
 	return (
-		<div className='flex justify-center gap-1'>
+		<div className='flex flex-col items-center justify-center gap-1'>
 			{options.map(option => (
 				<span
 					className='min-w-6 rounded border border-neutral-950 px-1 py-0.5 text-center text-xs font-black leading-none text-neutral-950'
@@ -542,8 +556,15 @@ function nextGroupRowDelay(rows: readonly GroupScoreRow[], visibleRowCount: numb
 	const nextRow = rows[visibleRowCount];
 
 	if (!currentRow || !nextRow) return 250;
-	if (currentRow.quizId === nextRow.quizId && (currentRow.isScreenRow || nextRow.isScreenRow)) return 500;
+	if (currentRow.quizId === nextRow.quizId && (currentRow.kind === 'screen' || nextRow.kind === 'screen')) return 500;
 	return 2000;
+}
+
+function summaryPointsForPlayer(rows: readonly GroupScoreRow[], quizId: string, playerName: string) {
+	const screenRows = rows.filter(row => row.quizId === quizId && row.kind === 'screen');
+	if (screenRows.length === 0) return null;
+
+	return sumOptionPoints(screenRows.map(row => row.pointsByPlayer[playerName] ?? emptyOptionPoints()));
 }
 
 function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; rows: readonly GroupScoreRow[] }) {
@@ -582,7 +603,7 @@ function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; ro
 
 	return (
 		<section className='flex min-h-0 flex-1 flex-col gap-3'>
-			<div className='min-h-0 flex-1 overflow-auto rounded-lg border-2 border-neutral-950 bg-white' ref={scrollRef}>
+			<div className='min-h-0 flex-1 overflow-auto rounded-lg bg-white' ref={scrollRef}>
 				<table className='w-full min-w-[360px] border-separate border-spacing-0 text-neutral-950'>
 					<thead className='sticky top-0 z-20'>
 						<tr>
@@ -604,17 +625,24 @@ function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; ro
 						{visibleRows.map(row => (
 							<tr className='group-tally-row' key={row.id}>
 								<th className='sticky left-0 z-10 w-20 border-b border-neutral-200 bg-white px-2 py-2 text-left align-middle'>
-									{row.isScreenRow ? (
+									{row.kind === 'screen' ? (
 										<span className='ml-2 block text-sm font-normal leading-tight'>{row.label}</span>
 									) : (
 										<span className='block text-sm font-black leading-tight'>{row.label}</span>
 									)}
 								</th>
-								{players.map(player => (
-									<td className='border-b border-neutral-200 px-1 py-2 text-center align-middle' key={player.name}>
-										<TableScoreChips points={row.pointsByPlayer[player.name] ?? emptyOptionPoints()} />
-									</td>
-								))}
+								{players.map(player => {
+									const points =
+										row.kind === 'summary'
+											? summaryPointsForPlayer(visibleRows, row.quizId, player.name)
+											: (row.pointsByPlayer[player.name] ?? emptyOptionPoints());
+
+									return (
+										<td className='border-b border-neutral-200 px-1 py-2 text-center align-middle' key={player.name}>
+											<TableScoreChips points={points} />
+										</td>
+									);
+								})}
 							</tr>
 						))}
 					</tbody>
@@ -658,7 +686,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	if (initialPlayerNameRef.current === null) initialPlayerNameRef.current = readStoredPlayerName();
 	const initialPlayerName = initialPlayerNameRef.current;
 	const hasInitialPlayerName = initialPlayerName.length > 0;
-	const { game, reloadPlayer, sendAction } = useGameServer(!skipIntro);
+	const { game, reloadGame, reloadPlayer, sendAction } = useGameServer(!skipIntro);
 	const loadedPlayerRef = useRef<string | null>(null);
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
@@ -701,6 +729,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		() => mergePlayers(game?.players ?? [], localGroupPlayer),
 		[game?.players, localGroupPlayer],
 	);
+	const groupAllDone = groupPlayers.length > 0 && groupPlayers.every(player => isPlayerDone(player, quizSet));
 	const applyPlayerProgress = useCallback((player: GamePlayer) => {
 		setQuizIndex(player.quizIndex);
 		setScreenIndex(player.screenIndex);
@@ -739,6 +768,14 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 			void sendAction({ type: 'join', name: syncedName });
 		});
 	}, [applyPlayerProgress, playerName, reloadPlayer, sendAction, showPlayerName, skipIntro]);
+
+	useEffect(() => {
+		if (skipIntro || !showGroupResults || groupAllDone) return;
+
+		void reloadGame();
+		const interval = window.setInterval(() => void reloadGame(), 1000);
+		return () => window.clearInterval(interval);
+	}, [groupAllDone, reloadGame, showGroupResults, skipIntro]);
 
 	useEffect(() => {
 		const audio = document.createElement('audio');
