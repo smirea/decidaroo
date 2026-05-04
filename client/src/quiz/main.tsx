@@ -284,11 +284,12 @@ function hasSavedProgress(player: GamePlayer) {
 	);
 }
 
-function playerFromProgress(name: string, progress: PlayerProgress): GamePlayer {
+function playerFromProgress(name: string, progress: PlayerProgress, endScreenAt?: string): GamePlayer {
 	const now = new Date().toISOString();
 
 	return {
 		...progress,
+		endScreenAt,
 		name,
 		score: progressScore(progress),
 		updatedAt: now,
@@ -301,15 +302,23 @@ function mergePlayers(players: readonly GamePlayer[], localPlayer: GamePlayer | 
 	const existingPlayer = players.find(player => player.name === localPlayer.name);
 	if (!existingPlayer) return [...players, localPlayer];
 
-	return players.map(player => (player.name === localPlayer.name ? localPlayer : player));
+	return players.map(player =>
+		player.name === localPlayer.name
+			? { ...player, ...localPlayer, endScreenAt: localPlayer.endScreenAt ?? player.endScreenAt }
+			: player,
+	);
 }
 
 function isPlayerDone(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
 	return player.results.length >= quizSet.length || player.quizIndex >= quizSet.length;
 }
 
-function donePlayerNames(players: readonly GamePlayer[], quizSet: readonly QuizDefinition[]) {
-	return players.filter(player => isPlayerDone(player, quizSet)).map(player => player.name);
+function isPlayerAtEndScreen(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
+	return isPlayerDone(player, quizSet) && Boolean(player.endScreenAt);
+}
+
+function endScreenPlayerNames(players: readonly GamePlayer[], quizSet: readonly QuizDefinition[]) {
+	return players.filter(player => isPlayerAtEndScreen(player, quizSet)).map(player => player.name);
 }
 
 function isPlayerKicked(
@@ -320,14 +329,14 @@ function isPlayerKicked(
 ) {
 	if (isPlayerDone(player, quizSet)) return false;
 
-	const doneNames = donePlayerNames(players, quizSet);
+	const doneNames = endScreenPlayerNames(players, quizSet);
 	const votes = new Set(kickVotes[player.name] ?? []);
 
 	return doneNames.length >= 2 && doneNames.every(name => votes.has(name));
 }
 
 function playerGameStatus(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
-	if (isPlayerDone(player, quizSet)) return 'done';
+	if (isPlayerDone(player, quizSet)) return 'final score';
 
 	return quizSet[player.quizIndex]?.title ?? quizSet[player.results.length]?.title ?? 'done';
 }
@@ -555,7 +564,7 @@ function WaitingForPlayers({
 	quizSet: readonly QuizDefinition[];
 }) {
 	const currentPlayer = players.find(player => player.name === currentPlayerName);
-	const currentPlayerDone = currentPlayer ? isPlayerDone(currentPlayer, quizSet) : false;
+	const currentPlayerReady = currentPlayer ? isPlayerAtEndScreen(currentPlayer, quizSet) : false;
 
 	return (
 		<section className='flex min-h-0 flex-1 flex-col justify-center gap-4'>
@@ -565,9 +574,10 @@ function WaitingForPlayers({
 			<div className='grid gap-2'>
 				{players.map(player => {
 					const playerDone = isPlayerDone(player, quizSet);
+					const playerReady = isPlayerAtEndScreen(player, quizSet);
 					const playerKicked = isPlayerKicked(player, players, quizSet, kickVotes);
 					const currentPlayerVoted = (kickVotes[player.name] ?? []).includes(currentPlayerName);
-					const canKick = currentPlayerDone && !playerDone && !playerKicked && !currentPlayerVoted;
+					const canKick = currentPlayerReady && !playerDone && !playerKicked && !currentPlayerVoted;
 
 					return (
 						<div
@@ -577,7 +587,7 @@ function WaitingForPlayers({
 							<p className='truncate font-black'>{player.name}</p>
 							<div className='flex items-center gap-2'>
 								<p className='rounded border-2 border-neutral-950 bg-white px-2 py-1 text-xs font-black uppercase'>
-									{playerKicked ? 'ignored' : playerGameStatus(player, quizSet)}
+									{playerKicked ? 'ignored' : playerReady ? 'done' : playerGameStatus(player, quizSet)}
 								</p>
 								{!playerDone && (
 									<button
@@ -721,7 +731,9 @@ function GroupResultsScreen({
 }) {
 	const readyForTallies =
 		players.length > 0 &&
-		players.every(player => isPlayerDone(player, quizSet) || isPlayerKicked(player, players, quizSet, kickVotes));
+		players.every(
+			player => isPlayerAtEndScreen(player, quizSet) || isPlayerKicked(player, players, quizSet, kickVotes),
+		);
 	const rows = useMemo(() => groupScoreRows(players, quizSet), [players, quizSet]);
 
 	return (
@@ -790,24 +802,34 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	);
 	const localGroupPlayer = useMemo(() => {
 		const syncedName = playerName.trim();
-		return syncedName ? playerFromProgress(syncedName, currentProgress) : null;
-	}, [currentProgress, playerName]);
+		const serverEndScreenAt = game?.players.find(player => player.name === syncedName)?.endScreenAt;
+		const endScreenAt = isDone && showGroupResults ? (serverEndScreenAt ?? new Date().toISOString()) : undefined;
+
+		return syncedName ? playerFromProgress(syncedName, currentProgress, endScreenAt) : null;
+	}, [currentProgress, game?.players, isDone, playerName, showGroupResults]);
 	const groupPlayers = useMemo(
 		() => mergePlayers(game?.players ?? [], localGroupPlayer),
 		[game?.players, localGroupPlayer],
 	);
 	const kickVotes = game?.kickVotes ?? emptyKickVotes;
-	const groupAllDone = groupPlayers.length > 0 && groupPlayers.every(player => isPlayerDone(player, quizSet));
-	const applyPlayerProgress = useCallback((player: GamePlayer) => {
-		setQuizIndex(player.quizIndex);
-		setScreenIndex(player.screenIndex);
-		setScreenScores(player.screenScores);
-		setLiveScreenScore(scoreInputToPoints({}));
-		setResults(player.results);
-		setShowGroupResults(false);
-		setShowPlayerName(false);
-		setShowVersusIntro(false);
-	}, []);
+	const groupReadyForTallies =
+		groupPlayers.length > 0 &&
+		groupPlayers.every(
+			player => isPlayerAtEndScreen(player, quizSet) || isPlayerKicked(player, groupPlayers, quizSet, kickVotes),
+		);
+	const applyPlayerProgress = useCallback(
+		(player: GamePlayer) => {
+			setQuizIndex(player.quizIndex);
+			setScreenIndex(player.screenIndex);
+			setScreenScores(player.screenScores);
+			setLiveScreenScore(scoreInputToPoints({}));
+			setResults(player.results);
+			setShowGroupResults(Boolean(player.endScreenAt && isPlayerDone(player, quizSet)));
+			setShowPlayerName(false);
+			setShowVersusIntro(false);
+		},
+		[quizSet],
+	);
 	const savePlayerProgress = useCallback(
 		(progress: PlayerProgress, name = playerName) => {
 			const syncedName = name.trim();
@@ -831,6 +853,14 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		},
 		[playerName, sendAction, skipIntro],
 	);
+	const enterGroupResults = useCallback(() => {
+		const syncedName = playerName.trim();
+
+		setShowGroupResults(true);
+		if (skipIntro || !syncedName) return;
+
+		void sendAction({ type: 'ready', name: syncedName });
+	}, [playerName, sendAction, skipIntro]);
 	useEffect(() => {
 		const syncedName = playerName.trim();
 		if (skipIntro || showPlayerName || !syncedName || loadedPlayerRef.current === syncedName) return;
@@ -847,12 +877,12 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	}, [applyPlayerProgress, playerName, reloadPlayer, sendAction, showPlayerName, skipIntro]);
 
 	useEffect(() => {
-		if (skipIntro || !showGroupResults || groupAllDone) return;
+		if (skipIntro || !showGroupResults || groupReadyForTallies) return;
 
 		void reloadGame();
 		const interval = window.setInterval(() => void reloadGame(), 1000);
 		return () => window.clearInterval(interval);
-	}, [groupAllDone, reloadGame, showGroupResults, skipIntro]);
+	}, [groupReadyForTallies, reloadGame, showGroupResults, skipIntro]);
 
 	useEffect(() => {
 		const audio = document.createElement('audio');
@@ -1201,7 +1231,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 							))}
 						</div>
 
-						<Button className='mt-auto' onClick={() => setShowGroupResults(true)} theme='endAction'>
+						<Button className='mt-auto' onClick={enterGroupResults} theme='endAction'>
 							but is this what everyone desires?
 						</Button>
 					</section>

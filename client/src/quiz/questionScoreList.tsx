@@ -53,19 +53,20 @@ export function QuestionScoreList({
 
 				return (
 					<button
+						aria-expanded={Boolean(isOpen)}
 						className='grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left text-sm transition-colors hover:bg-white'
 						key={`${item.title}-${index}`}
 						onClick={() => toggleItem(index, Boolean(item.content))}
 						type='button'
 					>
 						<span className='font-black text-neutral-400'>{index + 1}</span>
-						<span className='min-w-0'>
-							<span className='block truncate font-bold text-neutral-700'>{item.title}</span>
-							{isOpen ? (
-								<span className='mt-1 block font-semibold leading-snug text-neutral-950'>{item.content}</span>
-							) : null}
-						</span>
+						<span className='min-w-0 truncate font-bold text-neutral-700'>{item.title}</span>
 						<QuestionScoreChips points={item.points} />
+						{isOpen ? (
+							<span className='col-span-2 col-start-2 block font-semibold leading-snug text-neutral-950'>
+								{item.content}
+							</span>
+						) : null}
 					</button>
 				);
 			})}

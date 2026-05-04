@@ -22,6 +22,7 @@ export type PlayerProgress = {
 };
 
 export type GamePlayer = PlayerProgress & {
+	endScreenAt?: string;
 	name: string;
 	score: OptionPoints;
 	updatedAt: string;
@@ -42,4 +43,5 @@ export type GameResponse = {
 export type GameAction =
 	| { type: 'join'; name: string }
 	| { type: 'kick'; name: string; targetName: string }
+	| { type: 'ready'; name: string }
 	| { type: 'save'; name: string; progress: PlayerProgress; score: OptionPoints };

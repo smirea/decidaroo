@@ -212,6 +212,8 @@ function reduceGame(action: GameAction) {
 		gameState.kickVotes[targetName] = [...new Set([...(gameState.kickVotes[targetName] ?? []), name])];
 	}
 
+	if (action.type === 'ready') player.endScreenAt = now;
+
 	player.updatedAt = now;
 	gameState.updatedAt = now;
 	return player;
