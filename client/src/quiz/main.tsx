@@ -330,18 +330,25 @@ function endScreenPlayerNames(players: readonly GamePlayer[], quizSet: readonly 
 	return players.filter(player => isPlayerAtEndScreen(player, quizSet)).map(player => player.name);
 }
 
+function hasKickQuorum(
+	player: GamePlayer,
+	players: readonly GamePlayer[],
+	quizSet: readonly QuizDefinition[],
+	kickVotes: GameState['kickVotes'],
+) {
+	const doneNames = endScreenPlayerNames(players, quizSet);
+	const votes = new Set(kickVotes[player.name] ?? []);
+
+	return doneNames.length >= 2 && doneNames.every(name => votes.has(name));
+}
+
 function isPlayerKicked(
 	player: GamePlayer,
 	players: readonly GamePlayer[],
 	quizSet: readonly QuizDefinition[],
 	kickVotes: GameState['kickVotes'],
 ) {
-	if (isPlayerDone(player, quizSet)) return false;
-
-	const doneNames = endScreenPlayerNames(players, quizSet);
-	const votes = new Set(kickVotes[player.name] ?? []);
-
-	return doneNames.length >= 2 && doneNames.every(name => votes.has(name));
+	return !isPlayerDone(player, quizSet) && hasKickQuorum(player, players, quizSet, kickVotes);
 }
 
 function playerGameStatus(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
@@ -642,6 +649,7 @@ function summaryPointsForPlayer(rows: readonly GroupScoreRow[], quizId: string, 
 function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; rows: readonly GroupScoreRow[] }) {
 	const [visibleRowCount, setVisibleRowCount] = useState(0);
 	const scrollRef = useRef<HTMLDivElement | null>(null);
+	const revealKey = rows.map(row => row.id).join('|');
 	const visibleRows = rows.slice(0, visibleRowCount);
 	const tallies = groupTallies(visibleRows, players);
 
@@ -651,7 +659,7 @@ function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; ro
 
 		const timeout = window.setTimeout(() => setVisibleRowCount(1), 250);
 		return () => window.clearTimeout(timeout);
-	}, [rows]);
+	}, [revealKey, rows.length]);
 
 	useEffect(() => {
 		if (visibleRowCount === 0 || visibleRowCount >= rows.length) return;
@@ -740,9 +748,7 @@ function GroupResultsScreen({
 }) {
 	const readyForTallies =
 		players.length > 0 &&
-		players.every(
-			player => isPlayerAtEndScreen(player, quizSet) || isPlayerKicked(player, players, quizSet, kickVotes),
-		);
+		players.every(player => isPlayerAtEndScreen(player, quizSet) || hasKickQuorum(player, players, quizSet, kickVotes));
 	const rows = useMemo(() => groupScoreRows(players, quizSet), [players, quizSet]);
 
 	return (
@@ -824,7 +830,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const groupReadyForTallies =
 		groupPlayers.length > 0 &&
 		groupPlayers.every(
-			player => isPlayerAtEndScreen(player, quizSet) || isPlayerKicked(player, groupPlayers, quizSet, kickVotes),
+			player => isPlayerAtEndScreen(player, quizSet) || hasKickQuorum(player, groupPlayers, quizSet, kickVotes),
 		);
 	const applyPlayerProgress = useCallback(
 		(player: GamePlayer) => {
