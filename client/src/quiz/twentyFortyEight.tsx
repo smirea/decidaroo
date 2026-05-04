@@ -555,7 +555,9 @@ export default function TwentyFortyEightScreen({ submit }: QuizScreenProps<Twent
 		if (submittedRef.current) return;
 
 		submittedRef.current = true;
-		submit(boardScores(game.board, game.colorOptionNames));
+		submit(
+			Object.fromEntries(Object.entries(boardScores(game.board, game.colorOptionNames)).map(([k, v]) => [k, v / 2])),
+		);
 	}
 
 	return (

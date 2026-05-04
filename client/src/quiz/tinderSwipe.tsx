@@ -95,10 +95,10 @@ function TinderSwipeOverview({
 	return (
 		<div className='flex h-full min-h-0 w-full items-center justify-center px-2 py-3'>
 			<section className='flex max-h-full min-h-0 w-[calc(100%-1rem)] flex-col gap-4 overflow-hidden rounded-lg border-2 border-neutral-950 bg-white p-4 text-neutral-950 shadow-[6px_6px_0_#171717]'>
-				<div>
+				{/* <div>
 					<p className='text-xs font-black uppercase text-fuchsia-700'>swipe overview</p>
 					<h2 className='mt-1 text-2xl font-black leading-tight'>The match math has spoken</h2>
-				</div>
+				</div> */}
 
 				<ScoreChips scores={scores} />
 
@@ -241,30 +241,30 @@ function TinderSwipeScreen({ config, previewScore, submit }: QuizScreenProps<Tin
 
 const swipeQuestions = [
 	{
-		title: 'Cat Test',
+		title: 'Feeline Affinity',
 		question: 'Are you a cat (or do you have strong affinity for laser pointers) ?',
 		optionName: 'deci-mate',
 	},
 	{
-		title: 'Emoji Audit',
+		title: 'Emojiphillic',
 		question:
 			'Should the deciding interface include enough emoji energy that nobody can tell whether it is satire or UX?',
 		optionName: 'deci-mate',
 	},
 	{
-		title: 'Taste Check',
+		title: 'Michellin chef',
 		question: 'Do you have long covid and have subsequently lost all sense of taste ?',
 		optionName: 'deci-mate',
 		late: true,
 	},
 	{
-		title: 'Dimension Check',
+		title: 'Flatland hater',
 		question: "Have you ever felt that everyone's mindset is 2 dimensional and you alone are in anoter dimension?",
 		optionName: 'deci-mate',
 	},
 	{
-		title: 'Extra Axis',
-		question: 'Do you think it would be helpful to allow to you ALSO slide this card up AND down?',
+		title: 'Too smart for Tinder',
+		question: "Would it make you feel better if you'd be able to ALSO slide this card up and down?",
 		optionName: 'deci-mate',
 		late: true,
 	},
@@ -275,13 +275,13 @@ const swipeQuestions = [
 		optionName: 'decision-buddy',
 	},
 	{
-		title: 'Precise Excitement',
+		title: 'Sliders, really?',
 		question:
-			'Is the decision important enough to let everyone be exactly 31% excited and still pretend that is normal?',
+			'Is the decision important enough to let everyone be exactly 69% excited and still pretend that is normal?',
 		optionName: 'decision-buddy',
 	},
 	{
-		title: 'Form Enjoyer',
+		title: 'DMV Employee',
 		question:
 			'Do you have a fetish for meticulously filling out forms and would like to subject everyone else to it as well?',
 		optionName: 'decision-buddy',
@@ -294,9 +294,9 @@ const swipeQuestions = [
 		late: true,
 	},
 	{
-		title: 'Style Courage',
+		title: 'State-approved style',
 		question:
-			'Do you lack any artistic courage and just use boilerplate colors (or are you closeted communist and love the idea of a single universal style)',
+			'Do you lack any artistic courage and just use boilerplate colors (or are you a closeted communist and long for the idea of a single universal style)',
 		optionName: 'decision-buddy',
 		late: true,
 	},
