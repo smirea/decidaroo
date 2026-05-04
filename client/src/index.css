@@ -946,6 +946,22 @@ textarea {
 	animation: score-delta-float 760ms ease-out forwards;
 }
 
+@keyframes group-tally-row {
+	from {
+		opacity: 0;
+		transform: translateY(10px) scale(0.98);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.group-tally-row {
+	animation: group-tally-row 320ms ease-out both;
+}
+
 .cockpit-range {
 	height: 1.5rem;
 	appearance: none;

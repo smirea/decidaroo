@@ -3,6 +3,7 @@ import {
 	Suspense,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 	type CSSProperties,
@@ -11,9 +12,11 @@ import {
 } from 'react';
 import { Button } from '../components/Button.tsx';
 import { useGameServer } from '../hooks/useGameServerver.ts';
+import { LS } from '../utils/utils.ts';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { QuestionScoreList } from './questionScoreList.tsx';
 import {
+	emptyOptionPoints,
 	scoreInputToPoints,
 	sumOptionPoints,
 	type OptionPoints,
@@ -28,23 +31,15 @@ import { tinderSwipeQuiz } from './tinderSwipe.tsx';
 import { twentyFortyEightQuiz } from './twentyFortyEight.tsx';
 import { VersusIntro } from './versusIntro.tsx';
 
-export const quizzes = [tinderSwipeQuiz, twentyFortyEightQuiz, asteroidsQuiz, cockpitQuiz, diceRollQuiz] as const;
+export const quizzes = [tinderSwipeQuiz, diceRollQuiz, twentyFortyEightQuiz, asteroidsQuiz, cockpitQuiz] as const;
 const themeSongUrl = '/decidaroo.mp3';
 const versusSoundUrl = '/sfx/vs-intro.wav';
-const soundChoiceKey = 'decideroo:sound-choice';
-const soundToggleKey = 'decideroo:sound-on';
-const playerNameKey = 'decideroo:player-name';
 const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
 
 type SoundChoice = 'yes' | 'no';
 
 type StoredSoundChoice = {
 	choice: SoundChoice;
-	at: number;
-};
-
-type StoredSoundToggle = {
-	on: boolean;
 	at: number;
 };
 
@@ -63,6 +58,15 @@ type EyeLooks = {
 	right: EyeLook;
 };
 
+type GroupScoreRow = {
+	id: string;
+	quizId: string;
+	quizTitle: string;
+	label: string;
+	isScreenRow: boolean;
+	pointsByPlayer: Record<string, OptionPoints>;
+};
+
 function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
 }
@@ -76,17 +80,20 @@ function screenTitle(screen: unknown, index: number) {
 
 function readStoredSoundChoice(): StoredSoundChoice | null {
 	try {
-		const raw = window.localStorage.getItem(soundChoiceKey);
-		if (!raw) return null;
+		const stored = LS.get('sound-choice');
+		if (!stored) return null;
 
-		const parsed = JSON.parse(raw) as Partial<StoredSoundChoice>;
-		if ((parsed.choice !== 'yes' && parsed.choice !== 'no') || typeof parsed.at !== 'number') return null;
-		if (Date.now() - parsed.at >= soundChoiceSkipMs) {
-			window.localStorage.removeItem(soundChoiceKey);
+		if ((stored.choice !== 'yes' && stored.choice !== 'no') || typeof stored.at !== 'number') {
+			LS.delete('sound-choice');
 			return null;
 		}
 
-		return { choice: parsed.choice, at: parsed.at };
+		if (Date.now() - stored.at >= soundChoiceSkipMs) {
+			LS.delete('sound-choice');
+			return null;
+		}
+
+		return { choice: stored.choice, at: stored.at };
 	} catch {
 		return null;
 	}
@@ -94,7 +101,7 @@ function readStoredSoundChoice(): StoredSoundChoice | null {
 
 function writeStoredSoundChoice(choice: SoundChoice): StoredSoundChoice {
 	const stored = { choice, at: Date.now() };
-	window.localStorage.setItem(soundChoiceKey, JSON.stringify(stored));
+	LS.set({ 'sound-choice': stored });
 	return stored;
 }
 
@@ -104,40 +111,39 @@ function hasFreshHeadphoneYes(stored: StoredSoundChoice | null) {
 
 function readStoredSoundOn() {
 	try {
-		const raw = window.localStorage.getItem(soundToggleKey);
-		if (!raw) return true;
+		const stored = LS.get('sound-on');
+		if (!stored) return true;
 
-		const parsed = JSON.parse(raw) as Partial<StoredSoundToggle>;
-		if (typeof parsed.on !== 'boolean' || typeof parsed.at !== 'number') {
-			window.localStorage.removeItem(soundToggleKey);
+		if (typeof stored.on !== 'boolean' || typeof stored.at !== 'number') {
+			LS.delete('sound-on');
 			return true;
 		}
 
-		if (Date.now() - parsed.at >= soundChoiceSkipMs) {
-			window.localStorage.removeItem(soundToggleKey);
+		if (Date.now() - stored.at >= soundChoiceSkipMs) {
+			LS.delete('sound-on');
 			return true;
 		}
 
-		return parsed.on;
+		return stored.on;
 	} catch {
 		return true;
 	}
 }
 
 function writeStoredSoundOn(on: boolean) {
-	window.localStorage.setItem(soundToggleKey, JSON.stringify({ on, at: Date.now() }));
+	LS.set({ 'sound-on': { on, at: Date.now() } });
 }
 
 function readStoredPlayerName() {
 	try {
-		return window.localStorage.getItem(playerNameKey)?.trim() ?? '';
+		return LS.get('player-name')?.trim() ?? '';
 	} catch {
 		return '';
 	}
 }
 
 function writeStoredPlayerName(name: string) {
-	window.localStorage.setItem(playerNameKey, name);
+	LS.set({ 'player-name': name });
 }
 
 function getInitialSoundState() {
@@ -271,19 +277,98 @@ function progressScore(progress: PlayerProgress) {
 	return sumOptionPoints([...progress.results.map(result => result.points), ...progress.screenScores]);
 }
 
-function emptyProgress(): PlayerProgress {
-	return {
-		quizIndex: 0,
-		screenIndex: 0,
-		screenScores: [],
-		results: [],
-	};
-}
-
 function hasSavedProgress(player: GamePlayer) {
 	return (
 		player.quizIndex !== 0 || player.screenIndex !== 0 || player.screenScores.length > 0 || player.results.length > 0
 	);
+}
+
+function playerFromProgress(name: string, progress: PlayerProgress): GamePlayer {
+	const now = new Date().toISOString();
+
+	return {
+		...progress,
+		name,
+		score: progressScore(progress),
+		updatedAt: now,
+	};
+}
+
+function mergePlayers(players: readonly GamePlayer[], localPlayer: GamePlayer | null) {
+	if (!localPlayer) return [...players];
+
+	const existingPlayer = players.find(player => player.name === localPlayer.name);
+	if (!existingPlayer) return [...players, localPlayer];
+
+	return players.map(player => (player.name === localPlayer.name ? localPlayer : player));
+}
+
+function isPlayerDone(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
+	return player.results.length >= quizSet.length || player.quizIndex >= quizSet.length;
+}
+
+function playerGameStatus(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
+	if (isPlayerDone(player, quizSet)) return 'done';
+
+	return quizSet[player.quizIndex]?.title ?? quizSet[player.results.length]?.title ?? 'done';
+}
+
+function playerQuizResult(player: GamePlayer, quiz: QuizDefinition) {
+	return player.results.find(result => result.id === quiz.id) ?? null;
+}
+
+function groupScoreRows(players: readonly GamePlayer[], quizSet: readonly QuizDefinition[]) {
+	return quizSet.flatMap<GroupScoreRow>(quiz => {
+		const screenCount = Math.max(
+			1,
+			...players.map(player => playerQuizResult(player, quiz)?.screens.length ?? quiz.screens.length),
+		);
+
+		if (screenCount <= 1) {
+			return [
+				{
+					id: quiz.id,
+					quizId: quiz.id,
+					quizTitle: quiz.title,
+					label: quiz.title,
+					isScreenRow: false,
+					pointsByPlayer: Object.fromEntries(
+						players.map(player => [player.name, playerQuizResult(player, quiz)?.points ?? emptyOptionPoints()]),
+					),
+				},
+			];
+		}
+
+		return Array.from({ length: screenCount }, (_, screenIndex) => ({
+			id: `${quiz.id}-${screenIndex}`,
+			quizId: quiz.id,
+			quizTitle: quiz.title,
+			label:
+				players
+					.map(player => playerQuizResult(player, quiz)?.screens[screenIndex]?.title)
+					.find(title => typeof title === 'string') ?? screenTitle(quiz.screens[screenIndex], screenIndex),
+			isScreenRow: true,
+			pointsByPlayer: Object.fromEntries(
+				players.map(player => [
+					player.name,
+					playerQuizResult(player, quiz)?.screens[screenIndex]?.points ?? emptyOptionPoints(),
+				]),
+			),
+		}));
+	});
+}
+
+function groupTallies(rows: readonly GroupScoreRow[], players: readonly GamePlayer[]) {
+	const total = emptyOptionPoints();
+
+	for (const row of rows) {
+		for (const player of players) {
+			const points = row.pointsByPlayer[player.name] ?? emptyOptionPoints();
+			for (const option of decidingOptions) total[option.name] += points[option.name] ?? 0;
+		}
+	}
+
+	return total;
 }
 
 function ScoreStrip({ points }: { points: OptionPoints }) {
@@ -386,6 +471,181 @@ function StatusBar({
 	);
 }
 
+function TableScoreChips({ points }: { points: OptionPoints }) {
+	const options = nonZeroOptions(points);
+
+	if (options.length === 0) return <span className='text-xs font-black text-neutral-400'>0</span>;
+
+	return (
+		<div className='flex justify-center gap-1'>
+			{options.map(option => (
+				<span
+					className='min-w-6 rounded border border-neutral-950 px-1 py-0.5 text-center text-xs font-black leading-none text-neutral-950'
+					key={option.name}
+					style={{ backgroundColor: option.color }}
+				>
+					{optionPoint(points, option.name)}
+				</span>
+			))}
+		</div>
+	);
+}
+
+function TallyCards({ points }: { points: OptionPoints }) {
+	return (
+		<div className='grid shrink-0 grid-cols-2 gap-2'>
+			{decidingOptions.map(option => (
+				<div
+					className='rounded-lg border-2 border-neutral-950 p-2 text-neutral-950 shadow-[3px_3px_0_#171717]'
+					key={option.name}
+					style={{ backgroundColor: option.color }}
+				>
+					<p className='truncate text-xs font-black uppercase'>{option.name}</p>
+					<p className='text-2xl font-black leading-none'>{optionPoint(points, option.name)}</p>
+				</div>
+			))}
+		</div>
+	);
+}
+
+function WaitingForPlayers({
+	players,
+	quizSet,
+}: {
+	players: readonly GamePlayer[];
+	quizSet: readonly QuizDefinition[];
+}) {
+	return (
+		<section className='flex min-h-0 flex-1 flex-col justify-center gap-4'>
+			<div className='space-y-2 text-center'>
+				<h2 className='text-2xl font-black leading-tight text-neutral-950'>waiting for everyone to finish</h2>
+			</div>
+			<div className='grid gap-2'>
+				{players.map(player => (
+					<div
+						className='grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border-2 border-neutral-950 bg-neutral-50 p-3 text-neutral-950 shadow-[3px_3px_0_#171717]'
+						key={player.name}
+					>
+						<p className='truncate font-black'>{player.name}</p>
+						<p className='rounded border-2 border-neutral-950 bg-white px-2 py-1 text-xs font-black uppercase'>
+							{playerGameStatus(player, quizSet)}
+						</p>
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
+function nextGroupRowDelay(rows: readonly GroupScoreRow[], visibleRowCount: number) {
+	const currentRow = rows[visibleRowCount - 1];
+	const nextRow = rows[visibleRowCount];
+
+	if (!currentRow || !nextRow) return 250;
+	if (currentRow.quizId === nextRow.quizId && (currentRow.isScreenRow || nextRow.isScreenRow)) return 500;
+	return 2000;
+}
+
+function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; rows: readonly GroupScoreRow[] }) {
+	const [visibleRowCount, setVisibleRowCount] = useState(0);
+	const scrollRef = useRef<HTMLDivElement | null>(null);
+	const visibleRows = rows.slice(0, visibleRowCount);
+	const tallies = groupTallies(visibleRows, players);
+
+	useEffect(() => {
+		setVisibleRowCount(0);
+		if (rows.length === 0) return;
+
+		const timeout = window.setTimeout(() => setVisibleRowCount(1), 250);
+		return () => window.clearTimeout(timeout);
+	}, [rows]);
+
+	useEffect(() => {
+		if (visibleRowCount === 0 || visibleRowCount >= rows.length) return;
+
+		const timeout = window.setTimeout(
+			() => {
+				setVisibleRowCount(current => Math.min(current + 1, rows.length));
+			},
+			nextGroupRowDelay(rows, visibleRowCount),
+		);
+
+		return () => window.clearTimeout(timeout);
+	}, [rows, visibleRowCount]);
+
+	useEffect(() => {
+		const scrollElement = scrollRef.current;
+		if (!scrollElement) return;
+
+		scrollElement.scrollTo({ top: scrollElement.scrollHeight, behavior: 'smooth' });
+	}, [visibleRowCount]);
+
+	return (
+		<section className='flex min-h-0 flex-1 flex-col gap-3'>
+			<div className='min-h-0 flex-1 overflow-auto rounded-lg border-2 border-neutral-950 bg-white' ref={scrollRef}>
+				<table className='w-full min-w-[360px] border-separate border-spacing-0 text-neutral-950'>
+					<thead className='sticky top-0 z-20'>
+						<tr>
+							<th className='sticky left-0 z-30 h-24 w-20 border-b-2 border-neutral-950 bg-white px-2 text-left text-xs font-black uppercase'>
+								game
+							</th>
+							{players.map(player => (
+								<th className='h-24 w-12 border-b-2 border-neutral-950 bg-white px-1 align-bottom' key={player.name}>
+									<div className='flex h-24 items-end justify-center overflow-visible'>
+										<span className='origin-bottom-left -rotate-45 translate-x-3 translate-y-1 whitespace-nowrap text-xs font-black'>
+											{player.name}
+										</span>
+									</div>
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{visibleRows.map(row => (
+							<tr className='group-tally-row' key={row.id}>
+								<th className='sticky left-0 z-10 w-20 border-b border-neutral-200 bg-white px-2 py-2 text-left align-middle'>
+									{row.isScreenRow ? (
+										<span className='ml-2 block text-sm font-normal leading-tight'>{row.label}</span>
+									) : (
+										<span className='block text-sm font-black leading-tight'>{row.label}</span>
+									)}
+								</th>
+								{players.map(player => (
+									<td className='border-b border-neutral-200 px-1 py-2 text-center align-middle' key={player.name}>
+										<TableScoreChips points={row.pointsByPlayer[player.name] ?? emptyOptionPoints()} />
+									</td>
+								))}
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			<TallyCards points={tallies} />
+		</section>
+	);
+}
+
+function GroupResultsScreen({
+	players,
+	quizSet,
+}: {
+	players: readonly GamePlayer[];
+	quizSet: readonly QuizDefinition[];
+}) {
+	const allDone = players.length > 0 && players.every(player => isPlayerDone(player, quizSet));
+	const rows = useMemo(() => groupScoreRows(players, quizSet), [players, quizSet]);
+
+	return (
+		<section className='flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border-2 border-neutral-950 bg-white p-3 shadow-[5px_5px_0_#171717]'>
+			{allDone ? (
+				<GroupTallyTable players={players} rows={rows} />
+			) : (
+				<WaitingForPlayers players={players} quizSet={quizSet} />
+			)}
+		</section>
+	);
+}
+
 type Navigate = (path: string) => void;
 
 type QuizPageProps = {
@@ -398,7 +658,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	if (initialPlayerNameRef.current === null) initialPlayerNameRef.current = readStoredPlayerName();
 	const initialPlayerName = initialPlayerNameRef.current;
 	const hasInitialPlayerName = initialPlayerName.length > 0;
-	const { reloadPlayer, sendAction } = useGameServer(!skipIntro);
+	const { game, reloadPlayer, sendAction } = useGameServer(!skipIntro);
 	const loadedPlayerRef = useRef<string | null>(null);
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
@@ -406,6 +666,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const [liveScreenScore, setLiveScreenScore] = useState<OptionPoints>(() => scoreInputToPoints({}));
 	const [results, setResults] = useState<QuizResult[]>([]);
 	const [playerName, setPlayerName] = useState(initialPlayerName);
+	const [showGroupResults, setShowGroupResults] = useState(false);
 	const [showPlayerName, setShowPlayerName] = useState(!skipIntro && !hasInitialPlayerName);
 	const [soundState, setSoundState] = useState(() => {
 		if (!skipIntro && !hasInitialPlayerName) return getInitialSoundState();
@@ -428,12 +689,25 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const progress = isDone || totalScreens === 0 ? 100 : Math.round((completedScreens / totalScreens) * 100);
 	const activePoints = sumOptionPoints([...results.map(result => result.points), ...screenScores, liveScreenScore]);
 	const previewScore = useCallback((score: Partial<OptionPoints>) => setLiveScreenScore(scoreInputToPoints(score)), []);
+	const currentProgress = useMemo<PlayerProgress>(
+		() => ({ quizIndex, results, screenIndex, screenScores }),
+		[quizIndex, results, screenIndex, screenScores],
+	);
+	const localGroupPlayer = useMemo(() => {
+		const syncedName = playerName.trim();
+		return syncedName ? playerFromProgress(syncedName, currentProgress) : null;
+	}, [currentProgress, playerName]);
+	const groupPlayers = useMemo(
+		() => mergePlayers(game?.players ?? [], localGroupPlayer),
+		[game?.players, localGroupPlayer],
+	);
 	const applyPlayerProgress = useCallback((player: GamePlayer) => {
 		setQuizIndex(player.quizIndex);
 		setScreenIndex(player.screenIndex);
 		setScreenScores(player.screenScores);
 		setLiveScreenScore(scoreInputToPoints({}));
 		setResults(player.results);
+		setShowGroupResults(false);
 		setShowPlayerName(false);
 		setShowVersusIntro(false);
 	}, []);
@@ -503,20 +777,6 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 			setThemeSongPlaying(false);
 		};
 	}, []);
-
-	function restart() {
-		const nextProgress = emptyProgress();
-
-		versusSoundAttemptedRef.current = false;
-		setQuizIndex(0);
-		setScreenIndex(0);
-		setScreenScores([]);
-		setLiveScreenScore(scoreInputToPoints({}));
-		setResults([]);
-		setShowPlayerName(!skipIntro && !playerName.trim());
-		setShowVersusIntro(!skipIntro && !playerName.trim());
-		savePlayerProgress(nextProgress);
-	}
 
 	function submit(rawScore: Partial<OptionPoints>, details?: readonly ScoreDetail[]) {
 		if (!currentQuiz) return;
@@ -791,12 +1051,16 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	return (
 		<main className='relative isolate h-dvh overflow-hidden bg-neutral-950 text-neutral-950 sm:flex sm:items-center sm:justify-center sm:p-5'>
 			<ClubBackground />
-			{isDone ? (
+			{isDone && showGroupResults ? (
+				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col gap-3 p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
+					<LogoHeader />
+					<GroupResultsScreen players={groupPlayers} quizSet={quizSet} />
+				</section>
+			) : isDone ? (
 				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col gap-3 p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
 					<LogoHeader />
 					<section className='flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-lg border-2 border-neutral-950 bg-white p-4 shadow-[5px_5px_0_#171717]'>
 						<div className='space-y-3'>
-							<p className='text-xs font-bold uppercase text-fuchsia-700'>final verdict</p>
 							<h2 className='text-2xl font-black leading-tight text-neutral-950'>
 								{winningOption(finalPoints).name} is what you truly desire
 							</h2>
@@ -817,8 +1081,8 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 							))}
 						</div>
 
-						<Button className='mt-auto' onClick={restart} theme='endAction'>
-							Run the nonsense again
+						<Button className='mt-auto' onClick={() => setShowGroupResults(true)} theme='endAction'>
+							but is this what everyone desires?
 						</Button>
 					</section>
 					<StatusBar points={finalPoints} progress={progress} soundButton={<SoundButton />} />
