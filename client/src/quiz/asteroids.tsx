@@ -843,8 +843,7 @@ export default function AsteroidsScreen({ submit }: QuizScreenProps<AsteroidsScr
 	const [finished, setFinished] = useState(false);
 	const [hitFlash, setHitFlash] = useState(false);
 	const [remaining, setRemaining] = useState(60);
-	const { clearScoreAnimationTimeouts, displayScores, scoreBumps, scoreEffects, scores, setAnimatedScores } =
-		useAnimatedScores();
+	const { clearScoreAnimationTimeouts, displayScores, scoreEffects, scores, setAnimatedScores } = useAnimatedScores();
 	const flashTimeoutRef = useRef<number | null>(null);
 
 	useEffect(
@@ -882,7 +881,7 @@ export default function AsteroidsScreen({ submit }: QuizScreenProps<AsteroidsScr
 				{hitFlash ? (
 					<div className='pointer-events-none absolute inset-0 rounded-lg border-4 border-red-500 bg-red-600/30 shadow-[inset_0_0_42px_rgba(239,68,68,0.95)]' />
 				) : null}
-				<CompactScoreHud bumps={scoreBumps} effects={scoreEffects} remaining={remaining} scores={displayScores} />
+				<CompactScoreHud effects={scoreEffects} remaining={remaining} scores={displayScores} />
 				{finished ? (
 					<div className='absolute inset-0 flex items-center justify-center bg-neutral-950/45 p-4'>
 						<div className='rounded-lg border-2 border-neutral-950 bg-white p-4 text-center text-neutral-950 shadow-[5px_5px_0_#171717]'>

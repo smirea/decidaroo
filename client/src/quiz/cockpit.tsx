@@ -453,13 +453,16 @@ function DialOptionPips({
 
 				return (
 					<span
-						className='absolute left-1/2 top-1/2 rounded-full border-2 border-neutral-950 shadow-[1px_1px_0_#171717]'
+						className='absolute left-1/2 top-1/2 rounded-[0.16rem]'
 						key={`${optionName}-${index}`}
 						style={{
 							backgroundColor: optionColor(optionName),
-							height: selected ? '0.8rem' : '0.58rem',
+							boxShadow: selected
+								? '0 0 0 2px #171717, inset 1px 1px 0 rgba(255,255,255,0.45)'
+								: '0 0 0 1.5px #171717, inset 1px 1px 0 rgba(255,255,255,0.38)',
+							height: selected ? '1.02rem' : '0.88rem',
 							transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-${radius}px)`,
-							width: selected ? '0.8rem' : '0.58rem',
+							width: selected ? '0.38rem' : '0.3rem',
 						}}
 					/>
 				);
@@ -575,7 +578,9 @@ function Knob({
 				style={controlStyle(control.accent)}
 				type='button'
 			>
-				<DialTicks count={control.max - control.min + 1} endAngle={135} radius={40} startAngle={-135} />
+				{optionPips ? null : (
+					<DialTicks count={control.max - control.min + 1} endAngle={135} radius={40} startAngle={-135} />
+				)}
 				{optionPips ? (
 					<DialOptionPips endAngle={135} optionNames={optionPips} radius={40} startAngle={-135} value={value} />
 				) : null}
@@ -844,8 +849,9 @@ export default function CockpitScreen({ submit }: QuizScreenProps<CockpitScreenC
 	const popupIdRef = useRef(0);
 	const popupTimeoutsRef = useRef<number[]>([]);
 	const playSound = useCockpitSounds();
-	const { clearScoreAnimationTimeouts, displayScores, scoreBumps, scoreEffects, scores, setAnimatedScores } =
-		useAnimatedScores(previousScoresRef.current);
+	const { clearScoreAnimationTimeouts, displayScores, scoreEffects, scores, setAnimatedScores } = useAnimatedScores(
+		previousScoresRef.current,
+	);
 
 	useEffect(() => {
 		const nextScores = cockpitScores(cockpit);
@@ -955,7 +961,7 @@ export default function CockpitScreen({ submit }: QuizScreenProps<CockpitScreenC
 		<div className='flex h-full min-h-0 flex-col gap-3 px-2 py-3'>
 			<section className='relative h-full max-h-[36rem] min-h-0 overflow-hidden rounded-lg border-2 border-neutral-950 bg-lime-100 p-3 shadow-[5px_5px_0_#171717]'>
 				<div className='pointer-events-none absolute left-3 right-3 top-3 z-20 flex justify-end'>
-					<OptionScoreDisplays bumps={scoreBumps} effects={scoreEffects} scores={displayScores} />
+					<OptionScoreDisplays effects={scoreEffects} scores={displayScores} />
 				</div>
 
 				<div className='absolute left-3 top-[4.1rem]'>
@@ -992,7 +998,7 @@ export default function CockpitScreen({ submit }: QuizScreenProps<CockpitScreenC
 					<BaseAwardDisplay award={selectedBaseAward} />
 				</div>
 
-				<div className='absolute right-3 top-[18.3rem] z-10'>
+				<div className='absolute right-5 top-[15rem] z-10'>
 					<Knob control={d2Control} onChange={value => updateKnob(d2Control, value)} value={d2} />
 				</div>
 
@@ -1023,7 +1029,6 @@ export default function CockpitScreen({ submit }: QuizScreenProps<CockpitScreenC
 				{finished ? (
 					<div className='absolute inset-0 z-40 flex items-center justify-center bg-neutral-950/45 p-4'>
 						<div className='w-full max-w-xs rounded-lg border-2 border-neutral-950 bg-white p-4 text-center text-neutral-950 shadow-[5px_5px_0_#171717]'>
-							<p className='text-xs font-black uppercase text-orange-700'>final cockpit nonsense</p>
 							<div className='mt-3'>
 								<ScoreChips scores={scores} />
 							</div>

@@ -55,26 +55,15 @@ export function ScoreChips({ scores }: { scores: OptionPoints }) {
 	);
 }
 
-export function OptionScoreDisplays({
-	bumps,
-	effects,
-	scores,
-}: {
-	bumps: Record<string, number>;
-	effects: ScoreEffect[];
-	scores: OptionPoints;
-}) {
+export function OptionScoreDisplays({ effects, scores }: { effects: ScoreEffect[]; scores: OptionPoints }) {
 	return (
 		<div className='flex flex-1 flex-wrap justify-end gap-2'>
 			{decidingOptions.map(option => (
 				<div className='relative' key={option.name}>
 					<div
 						aria-label={`${option.name} score ${scores[option.name] ?? 0}`}
-						className='min-w-10 rounded-lg border-2 border-neutral-950 px-2 py-2 text-center text-xl font-black leading-none text-neutral-950 shadow-[3px_3px_0_#171717] transition-transform duration-200'
-						style={{
-							backgroundColor: option.color,
-							transform: bumps[option.name] ? 'translateY(-2px) scale(1.12)' : undefined,
-						}}
+						className='min-w-10 rounded-lg border-2 border-neutral-950 px-2 py-2 text-center text-xl font-black leading-none text-neutral-950 shadow-[3px_3px_0_#171717]'
+						style={{ backgroundColor: option.color }}
 					>
 						{scores[option.name] ?? 0}
 					</div>
@@ -99,12 +88,10 @@ export function OptionScoreDisplays({
 }
 
 export function CompactScoreHud({
-	bumps,
 	effects,
 	remaining,
 	scores,
 }: {
-	bumps: Record<string, number>;
 	effects: ScoreEffect[];
 	remaining: number;
 	scores: OptionPoints;
@@ -114,7 +101,7 @@ export function CompactScoreHud({
 			<div className='shrink-0 rounded-lg border-2 border-neutral-950 bg-white px-3 py-2 text-xl font-black leading-none text-neutral-950 shadow-[3px_3px_0_#171717]'>
 				{remaining}
 			</div>
-			<OptionScoreDisplays bumps={bumps} effects={effects} scores={scores} />
+			<OptionScoreDisplays effects={effects} scores={scores} />
 		</div>
 	);
 }
@@ -122,7 +109,6 @@ export function CompactScoreHud({
 export function useAnimatedScores(initialScores: OptionPoints = emptyOptionPoints()) {
 	const [scores, setScoresState] = useState<OptionPoints>(() => cloneScores(initialScores));
 	const [displayScores, setDisplayScores] = useState<OptionPoints>(() => cloneScores(initialScores));
-	const [scoreBumps, setScoreBumps] = useState<Record<string, number>>({});
 	const [scoreEffects, setScoreEffects] = useState<ScoreEffect[]>([]);
 	const effectIdRef = useRef(0);
 	const scoreTimeoutsRef = useRef<number[]>([]);
@@ -135,7 +121,6 @@ export function useAnimatedScores(initialScores: OptionPoints = emptyOptionPoint
 
 		if (!resetVisibleEffects) return;
 
-		setScoreBumps({});
 		setScoreEffects([]);
 	}
 
@@ -147,26 +132,14 @@ export function useAnimatedScores(initialScores: OptionPoints = emptyOptionPoint
 		scoreTimeoutsRef.current.push(timeout);
 	}
 
-	function removeScoreBump(optionName: string, bumpId: number) {
-		setScoreBumps(current => {
-			if (current[optionName] !== bumpId) return current;
-
-			const next = { ...current };
-			delete next[optionName];
-			return next;
-		});
-	}
-
 	function setAnimatedScores(nextScores: OptionPoints, scoreDeltas: ScoreDelta | ScoreDelta[] = []) {
 		const deltas = Array.isArray(scoreDeltas) ? scoreDeltas : [scoreDeltas];
 		const visibleDeltas = deltas.filter(delta => delta.delta !== 0);
 
 		setScoresState(nextScores);
+		setDisplayScores(nextScores);
 
-		if (visibleDeltas.length === 0) {
-			setDisplayScores(nextScores);
-			return;
-		}
+		if (visibleDeltas.length === 0) return;
 
 		for (const delta of visibleDeltas) {
 			const effectId = effectIdRef.current + 1;
@@ -175,18 +148,12 @@ export function useAnimatedScores(initialScores: OptionPoints = emptyOptionPoint
 			scheduleScoreAnimation(() => {
 				setScoreEffects(current => current.filter(effect => effect.id !== effectId));
 			}, 760);
-			scheduleScoreAnimation(() => {
-				setDisplayScores(delta.scores);
-				setScoreBumps(current => ({ ...current, [delta.optionName]: effectId }));
-				scheduleScoreAnimation(() => removeScoreBump(delta.optionName, effectId), 220);
-			}, 360);
 		}
 	}
 
 	return {
 		clearScoreAnimationTimeouts,
 		displayScores,
-		scoreBumps,
 		scoreEffects,
 		scores,
 		setAnimatedScores,
