@@ -10,6 +10,7 @@ import {
 	type ReactNode,
 } from 'react';
 import { Button } from '../components/Button.tsx';
+import { useGameServer } from '../hooks/useGameServerver.ts';
 import { decidingOptions } from '../../../shared/constants.ts';
 import { QuestionScoreList } from './questionScoreList.tsx';
 import {
@@ -19,6 +20,7 @@ import {
 	type QuizDefinition,
 	type ScoreDetail,
 } from './quizScreen.tsx';
+import type { GamePlayer, PlayerProgress, QuizResult } from '../../../shared/game.ts';
 import { asteroidsQuiz } from './asteroids.tsx';
 import { cockpitQuiz } from './cockpit.tsx';
 import { diceRollQuiz } from './diceRoll.tsx';
@@ -33,20 +35,6 @@ const soundChoiceKey = 'decideroo:sound-choice';
 const soundToggleKey = 'decideroo:sound-on';
 const playerNameKey = 'decideroo:player-name';
 const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
-
-type ScreenResult = {
-	title: string;
-	content?: string;
-	points: OptionPoints;
-};
-
-type QuizResult = {
-	id: string;
-	title: string;
-	points: OptionPoints;
-	screens: ScreenResult[];
-	completedScreenCount: number;
-};
 
 type SoundChoice = 'yes' | 'no';
 
@@ -279,6 +267,25 @@ function winningOption(points: OptionPoints) {
 	);
 }
 
+function progressScore(progress: PlayerProgress) {
+	return sumOptionPoints([...progress.results.map(result => result.points), ...progress.screenScores]);
+}
+
+function emptyProgress(): PlayerProgress {
+	return {
+		quizIndex: 0,
+		screenIndex: 0,
+		screenScores: [],
+		results: [],
+	};
+}
+
+function hasSavedProgress(player: GamePlayer) {
+	return (
+		player.quizIndex !== 0 || player.screenIndex !== 0 || player.screenScores.length > 0 || player.results.length > 0
+	);
+}
+
 function ScoreStrip({ points }: { points: OptionPoints }) {
 	const options = nonZeroOptions(points);
 
@@ -387,21 +394,27 @@ type QuizPageProps = {
 };
 
 export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps) {
+	const initialPlayerNameRef = useRef<string | null>(null);
+	if (initialPlayerNameRef.current === null) initialPlayerNameRef.current = readStoredPlayerName();
+	const initialPlayerName = initialPlayerNameRef.current;
+	const hasInitialPlayerName = initialPlayerName.length > 0;
+	const { reloadPlayer, sendAction } = useGameServer(!skipIntro);
+	const loadedPlayerRef = useRef<string | null>(null);
 	const [quizIndex, setQuizIndex] = useState(0);
 	const [screenIndex, setScreenIndex] = useState(0);
 	const [screenScores, setScreenScores] = useState<OptionPoints[]>([]);
 	const [liveScreenScore, setLiveScreenScore] = useState<OptionPoints>(() => scoreInputToPoints({}));
 	const [results, setResults] = useState<QuizResult[]>([]);
-	const [playerName, setPlayerName] = useState(readStoredPlayerName);
-	const [showPlayerName, setShowPlayerName] = useState(!skipIntro);
+	const [playerName, setPlayerName] = useState(initialPlayerName);
+	const [showPlayerName, setShowPlayerName] = useState(!skipIntro && !hasInitialPlayerName);
 	const [soundState, setSoundState] = useState(() => {
-		if (!skipIntro) return getInitialSoundState();
+		if (!skipIntro && !hasInitialPlayerName) return getInitialSoundState();
 
 		return { stored: readStoredSoundChoice(), showIntro: false };
 	});
 	const [, setSoundOn] = useState(readStoredSoundOn);
 	const [themeSongPlaying, setThemeSongPlaying] = useState(false);
-	const [showVersusIntro, setShowVersusIntro] = useState(!skipIntro);
+	const [showVersusIntro, setShowVersusIntro] = useState(!skipIntro && !hasInitialPlayerName);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 	const versusAudioRef = useRef<HTMLAudioElement | null>(null);
 	const versusSoundAttemptedRef = useRef(false);
@@ -415,6 +428,43 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	const progress = isDone || totalScreens === 0 ? 100 : Math.round((completedScreens / totalScreens) * 100);
 	const activePoints = sumOptionPoints([...results.map(result => result.points), ...screenScores, liveScreenScore]);
 	const previewScore = useCallback((score: Partial<OptionPoints>) => setLiveScreenScore(scoreInputToPoints(score)), []);
+	const applyPlayerProgress = useCallback((player: GamePlayer) => {
+		setQuizIndex(player.quizIndex);
+		setScreenIndex(player.screenIndex);
+		setScreenScores(player.screenScores);
+		setLiveScreenScore(scoreInputToPoints({}));
+		setResults(player.results);
+		setShowPlayerName(false);
+		setShowVersusIntro(false);
+	}, []);
+	const savePlayerProgress = useCallback(
+		(progress: PlayerProgress, name = playerName) => {
+			const syncedName = name.trim();
+			if (skipIntro || !syncedName) return;
+
+			void sendAction({
+				type: 'save',
+				name: syncedName,
+				progress,
+				score: progressScore(progress),
+			});
+		},
+		[playerName, sendAction, skipIntro],
+	);
+	useEffect(() => {
+		const syncedName = playerName.trim();
+		if (skipIntro || showPlayerName || !syncedName || loadedPlayerRef.current === syncedName) return;
+
+		loadedPlayerRef.current = syncedName;
+		void reloadPlayer(syncedName).then(player => {
+			if (player) {
+				applyPlayerProgress(player);
+				return;
+			}
+
+			void sendAction({ type: 'join', name: syncedName });
+		});
+	}, [applyPlayerProgress, playerName, reloadPlayer, sendAction, showPlayerName, skipIntro]);
 
 	useEffect(() => {
 		const audio = document.createElement('audio');
@@ -455,14 +505,17 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 	}, []);
 
 	function restart() {
+		const nextProgress = emptyProgress();
+
 		versusSoundAttemptedRef.current = false;
 		setQuizIndex(0);
 		setScreenIndex(0);
 		setScreenScores([]);
 		setLiveScreenScore(scoreInputToPoints({}));
 		setResults([]);
-		setShowPlayerName(!skipIntro);
-		setShowVersusIntro(!skipIntro);
+		setShowPlayerName(!skipIntro && !playerName.trim());
+		setShowVersusIntro(!skipIntro && !playerName.trim());
+		savePlayerProgress(nextProgress);
 	}
 
 	function submit(rawScore: Partial<OptionPoints>, details?: readonly ScoreDetail[]) {
@@ -476,9 +529,17 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		}));
 
 		if (screenIndex < currentQuiz.screens.length - 1) {
+			const nextProgress = {
+				quizIndex,
+				screenIndex: screenIndex + 1,
+				screenScores: nextScores,
+				results,
+			};
+
 			setScreenScores(nextScores);
 			setLiveScreenScore(scoreInputToPoints({}));
 			setScreenIndex(current => current + 1);
+			savePlayerProgress(nextProgress);
 			return;
 		}
 
@@ -495,11 +556,20 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 			completedScreenCount: currentQuiz.screens.length,
 		};
 
-		setResults(current => [...current, nextResult]);
+		const nextResults = [...results, nextResult];
+		const nextProgress = {
+			quizIndex: quizIndex + 1,
+			screenIndex: 0,
+			screenScores: [],
+			results: nextResults,
+		};
+
+		setResults(nextResults);
 		setScreenScores([]);
 		setLiveScreenScore(scoreInputToPoints({}));
 		setScreenIndex(0);
 		setQuizIndex(current => current + 1);
+		savePlayerProgress(nextProgress);
 	}
 
 	async function playThemeSong() {
@@ -566,8 +636,12 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		if (!nextName) return;
 
 		writeStoredPlayerName(nextName);
+		loadedPlayerRef.current = nextName;
 		setPlayerName(nextName);
 		setShowPlayerName(false);
+		void sendAction({ type: 'join', name: nextName }).then(player => {
+			if (player && hasSavedProgress(player)) applyPlayerProgress(player);
+		});
 		if (hasFreshHeadphoneYes(soundState.stored)) void playVersusIntroSound();
 	}
 

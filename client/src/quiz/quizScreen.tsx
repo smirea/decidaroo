@@ -1,7 +1,8 @@
 import type { ComponentType, LazyExoticComponent } from 'react';
 import { decidingOptions } from '../../../shared/constants.ts';
+import type { OptionPoints } from '../../../shared/game.ts';
 
-export type OptionPoints = Record<string, number>;
+export type { OptionPoints } from '../../../shared/game.ts';
 export type ScoreDetail = {
 	title: string;
 	content?: string;
