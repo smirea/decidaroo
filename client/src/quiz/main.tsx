@@ -670,13 +670,13 @@ function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; ro
 				<table className='w-full min-w-[360px] border-separate border-spacing-0 text-neutral-950'>
 					<thead className='sticky top-0 z-20'>
 						<tr>
-							<th className='sticky left-0 z-30 h-24 w-20 border-b-2 border-neutral-950 bg-white px-2 text-left text-xs font-black uppercase'>
+							<th className='sticky left-0 z-30 h-16 w-20 border-b-2 border-neutral-950 bg-white px-2 text-left text-xs font-black uppercase'>
 								game
 							</th>
 							{players.map(player => (
-								<th className='h-24 w-12 border-b-2 border-neutral-950 bg-white px-1 align-bottom' key={player.name}>
-									<div className='flex h-24 items-end justify-center overflow-visible'>
-										<span className='origin-bottom-left -rotate-45 translate-x-3 translate-y-1 whitespace-nowrap text-xs font-black'>
+								<th className='h-16 w-12 border-b-2 border-neutral-950 bg-white px-1 align-bottom' key={player.name}>
+									<div className='flex h-16 items-end justify-center overflow-visible pb-3'>
+										<span className='origin-bottom-left -rotate-45 translate-x-2 whitespace-nowrap text-xs font-black'>
 											{player.name}
 										</span>
 									</div>
