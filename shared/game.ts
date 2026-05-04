@@ -31,6 +31,7 @@ export type GameState = {
 	startedAt: string;
 	updatedAt: string;
 	players: GamePlayer[];
+	kickVotes: Record<string, string[]>;
 };
 
 export type GameResponse = {
@@ -40,4 +41,5 @@ export type GameResponse = {
 
 export type GameAction =
 	| { type: 'join'; name: string }
+	| { type: 'kick'; name: string; targetName: string }
 	| { type: 'save'; name: string; progress: PlayerProgress; score: OptionPoints };

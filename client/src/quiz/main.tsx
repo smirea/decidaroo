@@ -1,4 +1,4 @@
-import { Headphones, SpeakerHigh, SpeakerSlash, UserCircle } from '@phosphor-icons/react';
+import { Boot, Headphones, SpeakerHigh, SpeakerSlash, UserCircle } from '@phosphor-icons/react';
 import {
 	Suspense,
 	useCallback,
@@ -23,7 +23,7 @@ import {
 	type QuizDefinition,
 	type ScoreDetail,
 } from './quizScreen.tsx';
-import type { GamePlayer, PlayerProgress, QuizResult } from '../../../shared/game.ts';
+import type { GamePlayer, GameState, PlayerProgress, QuizResult } from '../../../shared/game.ts';
 import { asteroidsQuiz } from './asteroids.tsx';
 import { cockpitQuiz } from './cockpit.tsx';
 import { diceRollQuiz } from './diceRoll.tsx';
@@ -35,6 +35,7 @@ export const quizzes = [tinderSwipeQuiz, diceRollQuiz, twentyFortyEightQuiz, ast
 const themeSongUrl = '/decidaroo.mp3';
 const versusSoundUrl = '/sfx/vs-intro.wav';
 const soundChoiceSkipMs = 24 * 60 * 60 * 1000;
+const emptyKickVotes: GameState['kickVotes'] = {};
 
 type SoundChoice = 'yes' | 'no';
 
@@ -307,6 +308,24 @@ function isPlayerDone(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
 	return player.results.length >= quizSet.length || player.quizIndex >= quizSet.length;
 }
 
+function donePlayerNames(players: readonly GamePlayer[], quizSet: readonly QuizDefinition[]) {
+	return players.filter(player => isPlayerDone(player, quizSet)).map(player => player.name);
+}
+
+function isPlayerKicked(
+	player: GamePlayer,
+	players: readonly GamePlayer[],
+	quizSet: readonly QuizDefinition[],
+	kickVotes: GameState['kickVotes'],
+) {
+	if (isPlayerDone(player, quizSet)) return false;
+
+	const doneNames = donePlayerNames(players, quizSet);
+	const votes = new Set(kickVotes[player.name] ?? []);
+
+	return doneNames.length >= 2 && doneNames.every(name => votes.has(name));
+}
+
 function playerGameStatus(player: GamePlayer, quizSet: readonly QuizDefinition[]) {
 	if (isPlayerDone(player, quizSet)) return 'done';
 
@@ -523,29 +542,63 @@ function TallyCards({ points }: { points: OptionPoints }) {
 }
 
 function WaitingForPlayers({
+	currentPlayerName,
+	kickVotes,
+	onKick,
 	players,
 	quizSet,
 }: {
+	currentPlayerName: string;
+	kickVotes: GameState['kickVotes'];
+	onKick: (targetName: string) => void;
 	players: readonly GamePlayer[];
 	quizSet: readonly QuizDefinition[];
 }) {
+	const currentPlayer = players.find(player => player.name === currentPlayerName);
+	const currentPlayerDone = currentPlayer ? isPlayerDone(currentPlayer, quizSet) : false;
+
 	return (
 		<section className='flex min-h-0 flex-1 flex-col justify-center gap-4'>
 			<div className='space-y-2 text-center'>
 				<h2 className='text-2xl font-black leading-tight text-neutral-950'>waiting for everyone to finish</h2>
 			</div>
 			<div className='grid gap-2'>
-				{players.map(player => (
-					<div
-						className='grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border-2 border-neutral-950 bg-neutral-50 p-3 text-neutral-950 shadow-[3px_3px_0_#171717]'
-						key={player.name}
-					>
-						<p className='truncate font-black'>{player.name}</p>
-						<p className='rounded border-2 border-neutral-950 bg-white px-2 py-1 text-xs font-black uppercase'>
-							{playerGameStatus(player, quizSet)}
-						</p>
-					</div>
-				))}
+				{players.map(player => {
+					const playerDone = isPlayerDone(player, quizSet);
+					const playerKicked = isPlayerKicked(player, players, quizSet, kickVotes);
+					const currentPlayerVoted = (kickVotes[player.name] ?? []).includes(currentPlayerName);
+					const canKick = currentPlayerDone && !playerDone && !playerKicked && !currentPlayerVoted;
+
+					return (
+						<div
+							className='grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border-2 border-neutral-950 bg-neutral-50 p-3 text-neutral-950 shadow-[3px_3px_0_#171717]'
+							key={player.name}
+						>
+							<p className='truncate font-black'>{player.name}</p>
+							<div className='flex items-center gap-2'>
+								<p className='rounded border-2 border-neutral-950 bg-white px-2 py-1 text-xs font-black uppercase'>
+									{playerKicked ? 'ignored' : playerGameStatus(player, quizSet)}
+								</p>
+								{!playerDone && (
+									<button
+										aria-label={`boot ${player.name}`}
+										className={`grid h-9 w-9 place-items-center rounded border-2 border-neutral-950 ${
+											currentPlayerVoted || playerKicked
+												? 'bg-neutral-950 text-white'
+												: 'bg-white text-neutral-950 shadow-[2px_2px_0_#171717]'
+										} disabled:cursor-default disabled:opacity-70`}
+										disabled={!canKick}
+										onClick={() => onKick(player.name)}
+										title={`boot ${player.name}`}
+										type='button'
+									>
+										<Boot size={18} weight={currentPlayerVoted || playerKicked ? 'fill' : 'bold'} />
+									</button>
+								)}
+							</div>
+						</div>
+					);
+				})}
 			</div>
 		</section>
 	);
@@ -654,21 +707,35 @@ function GroupTallyTable({ players, rows }: { players: readonly GamePlayer[]; ro
 }
 
 function GroupResultsScreen({
+	currentPlayerName,
+	kickVotes,
+	onKick,
 	players,
 	quizSet,
 }: {
+	currentPlayerName: string;
+	kickVotes: GameState['kickVotes'];
+	onKick: (targetName: string) => void;
 	players: readonly GamePlayer[];
 	quizSet: readonly QuizDefinition[];
 }) {
-	const allDone = players.length > 0 && players.every(player => isPlayerDone(player, quizSet));
+	const readyForTallies =
+		players.length > 0 &&
+		players.every(player => isPlayerDone(player, quizSet) || isPlayerKicked(player, players, quizSet, kickVotes));
 	const rows = useMemo(() => groupScoreRows(players, quizSet), [players, quizSet]);
 
 	return (
 		<section className='flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border-2 border-neutral-950 bg-white p-3 shadow-[5px_5px_0_#171717]'>
-			{allDone ? (
+			{readyForTallies ? (
 				<GroupTallyTable players={players} rows={rows} />
 			) : (
-				<WaitingForPlayers players={players} quizSet={quizSet} />
+				<WaitingForPlayers
+					currentPlayerName={currentPlayerName}
+					kickVotes={kickVotes}
+					onKick={onKick}
+					players={players}
+					quizSet={quizSet}
+				/>
 			)}
 		</section>
 	);
@@ -729,6 +796,7 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 		() => mergePlayers(game?.players ?? [], localGroupPlayer),
 		[game?.players, localGroupPlayer],
 	);
+	const kickVotes = game?.kickVotes ?? emptyKickVotes;
 	const groupAllDone = groupPlayers.length > 0 && groupPlayers.every(player => isPlayerDone(player, quizSet));
 	const applyPlayerProgress = useCallback((player: GamePlayer) => {
 		setQuizIndex(player.quizIndex);
@@ -751,6 +819,15 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 				progress,
 				score: progressScore(progress),
 			});
+		},
+		[playerName, sendAction, skipIntro],
+	);
+	const kickPlayer = useCallback(
+		(targetName: string) => {
+			const syncedName = playerName.trim();
+			if (skipIntro || !syncedName) return;
+
+			void sendAction({ type: 'kick', name: syncedName, targetName });
 		},
 		[playerName, sendAction, skipIntro],
 	);
@@ -1091,7 +1168,13 @@ export function QuizPage({ quizSet = quizzes, skipIntro = false }: QuizPageProps
 			{isDone && showGroupResults ? (
 				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col gap-3 p-3 sm:h-[760px] sm:max-h-full sm:p-0'>
 					<LogoHeader />
-					<GroupResultsScreen players={groupPlayers} quizSet={quizSet} />
+					<GroupResultsScreen
+						currentPlayerName={playerName.trim()}
+						kickVotes={kickVotes}
+						onKick={kickPlayer}
+						players={groupPlayers}
+						quizSet={quizSet}
+					/>
 				</section>
 			) : isDone ? (
 				<section className='relative z-10 mx-auto flex h-full w-full max-w-md flex-col gap-3 p-3 sm:h-[760px] sm:max-h-full sm:p-0'>

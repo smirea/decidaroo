@@ -51,6 +51,7 @@ function newGameState(now = new Date()): GameState {
 	return {
 		startedAt: timestamp,
 		updatedAt: timestamp,
+		kickVotes: {},
 		players: [],
 	};
 }
@@ -61,10 +62,17 @@ function gameFilePath(game = gameState) {
 
 async function readGame(filePath: string) {
 	try {
-		return JSON.parse(await readFile(filePath, 'utf8')) as GameState;
+		return normalizeGame(JSON.parse(await readFile(filePath, 'utf8')) as GameState);
 	} catch {
 		return null;
 	}
+}
+
+function normalizeGame(game: GameState): GameState {
+	return {
+		...game,
+		kickVotes: game.kickVotes ?? {},
+	};
 }
 
 async function loadInitialGame() {
@@ -195,6 +203,13 @@ function reduceGame(action: GameAction) {
 		player.screenScores = action.progress.screenScores;
 		player.results = action.progress.results;
 		player.score = action.score;
+	}
+
+	if (action.type === 'kick') {
+		const targetName = action.targetName.trim();
+		if (!targetName) return null;
+
+		gameState.kickVotes[targetName] = [...new Set([...(gameState.kickVotes[targetName] ?? []), name])];
 	}
 
 	player.updatedAt = now;
