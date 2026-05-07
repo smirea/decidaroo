@@ -19,6 +19,7 @@ jobs:
           MAC_UPDATE_BEARER_KEY: ${{ secrets.MAC_UPDATE_BEARER_KEY }}
         run: |
           : "${MAC_UPDATE_BEARER_KEY:?MAC_UPDATE_BEARER_KEY secret is not set}"
-          curl --fail-with-body --show-error --silent --request POST \
+          curl --fail-with-body --show-error --silent --no-buffer --request POST \
             --header "Authorization: Bearer ${MAC_UPDATE_BEARER_KEY}" \
-            https://mac.stf.lol/update/decideroo
+            https://mac.stf.lol/update/decideroo | tee update.log
+          grep -q '^DEPLOY_OK repo=decideroo$' update.log
